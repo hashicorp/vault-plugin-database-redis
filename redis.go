@@ -120,19 +120,35 @@ func (c *RedisDB) DeleteUser(ctx context.Context, req dbplugin.DeleteUserRequest
 	}()
 
 	var response string
-	
-	err = db.Do(radix.Cmd(&response, "ACL", "DELUSER", req.Username))
 
-	fmt.Printf("Response in DeleteUser: %s\n", response)
+	switch db.(type) {
+
+	case *radix.Pool:
+		err = db.Do(radix.Cmd(&response, "ACL", "DELUSER", req.Username))
+		fmt.Printf("Response in pool DeleteUser: %s\n", response)
 	
-	if err != nil {
-		return dbplugin.DeleteUserResponse{}, err
+		if err != nil {
+			return dbplugin.DeleteUserResponse{}, err
+		}
+	case *radix.Cluster:
+		topo := db.(*radix.Cluster).Topo()
+		nodes := topo.Map()
+		for node := range nodes {
+			cl, err := db.(*radix.Cluster).Client(node)
+			err = cl.Do(radix.Cmd(&response, "ACL", "DELUSER", req.Username))
+			fmt.Printf("Response in cluster DeleteUser: %s\n", response)
+			
+			if err != nil {
+				return dbplugin.DeleteUserResponse{}, err
+			}
+			
+		}
 	}
 
 	return dbplugin.DeleteUserResponse{}, nil
 }
 
-func newUser(ctx context.Context, db *radix.Pool, username string, req dbplugin.NewUserRequest) error {
+func newUser(ctx context.Context, db radix.Client, username string, req dbplugin.NewUserRequest) error {
 	statements := removeEmpty(req.Statements.Commands)
 	if len(statements) == 0 {
 		statements = append(statements, defaultRedisUserRule)
@@ -151,17 +167,36 @@ func newUser(ctx context.Context, db *radix.Pool, username string, req dbplugin.
 
 	aclargs = append(aclargs, args...)
 	fmt.Printf("Appended args: %v\n", aclargs)
+	fmt.Printf("Client type is %T\n", db)
 	var response string
-	
+
+	switch db.(type) {
+
+	case *radix.Pool:
 	//	err = db.Do(radix.Cmd(&response, "ACL", "SETUSER", username, "on", ">" + req.Password, args...))
-	err = db.Do(radix.Cmd(&response, "ACL", aclargs...))
+		err = db.Do(radix.Cmd(&response, "ACL", aclargs...))
 
-	fmt.Printf("Response in newUser: %s\n", response)
+		fmt.Printf("Response in newUser: %s\n", response)
 	
-	if err != nil {
-		return err
-	}
+		if err != nil {
+			return err
+		}
+	case *radix.Cluster:
+		topo := db.(*radix.Cluster).Topo()
+		nodes := topo.Map()
+		for node := range nodes {
+			cl, err := db.(*radix.Cluster).Client(node)
+			err = cl.Do(radix.Cmd(&response, "ACL", aclargs...))
 
+			fmt.Printf("Response in cluster newUser: %s\n", response)
+			
+			if err != nil {
+				return err
+			}
+			
+		}
+	}
+	
 	return nil
 }
 
@@ -183,32 +218,80 @@ func (c *RedisDB) changeUserPassword(ctx context.Context, username, password str
 	}()
 
 	var response resp2.Array
+	var redisErr resp2.Error
 	mn := radix.MaybeNil{Rcv: &response}
 	
+	switch db.(type) {
 
-	var redisErr resp2.Error
-	err = db.Do(radix.Cmd(&mn, "ACL", "GETUSER", username))
-	if errors.As(err, &redisErr) {
-		fmt.Printf("redis error returned: %s", redisErr.E)
+	case *radix.Pool:
+
+		err = db.Do(radix.Cmd(&mn, "ACL", "GETUSER", username))
+		if errors.As(err, &redisErr) {
+			fmt.Printf("redis error returned: %s", redisErr.E)
+		}
+
+
+		if err != nil {
+			return fmt.Errorf("reset of passwords for user %s failed in changeUserPassword: %w", username, err)
+		}
+
+		if mn.Nil {
+			return fmt.Errorf("changeUserPassword for user %s failed, user not found!", username);
+		}
+
+	case *radix.Cluster:
+		topo := db.(*radix.Cluster).Topo()
+		nodes := topo.Map()
+		for node := range nodes {
+			cl, err := db.(*radix.Cluster).Client(node)
+			//err = cl.Do(radix.Cmd(&response, "ACL", "DELUSER", req.Username))
+			//fmt.Printf("Response in cluster DeleteUser: %s\n", response)
+			
+			//if err != nil {
+			//	return dbplugin.DeleteUserResponse{}, err
+			//}
+			err = cl.Do(radix.Cmd(&mn, "ACL", "GETUSER", username))
+			if errors.As(err, &redisErr) {
+				fmt.Printf("redis error returned: %s", redisErr.E)
+			}
+			
+			
+			if err != nil {
+				return fmt.Errorf("reset of passwords for user %s failed in changeUserPassword on cluster member %s: %w", username, node, err)
+			}
+			
+			if mn.Nil {
+				return fmt.Errorf("changeUserPassword for user %s failed on cluster member %s, user not found!", node, username);
+			}
+		}
 	}
 
-	fmt.Printf("Response in changeUserPassword: %#v for %s %T\n", response, username, response)
-
-	if err != nil {
-		return fmt.Errorf("reset of passwords for user %s failed in changeUserPassword: %w", username, err)
-	}
-
-	if mn.Nil {
-		return fmt.Errorf("changeUserPassword for user %s failed, user not found!", username);
-	}
-	
 	var sresponse string
-	err = db.Do(radix.Cmd(&sresponse, "ACL", "SETUSER", username, "RESETPASS", ">" + password))
+	switch db.(type) {
 
-	fmt.Printf("Response in changeUserPassword2: %s\n", sresponse)
+	case *radix.Pool:
+		err = db.Do(radix.Cmd(&sresponse, "ACL", "SETUSER", username, "RESETPASS", ">" + password))
 
-	if err != nil {
-		return err
+		fmt.Printf("Response in changeUserPassword2: %s\n", sresponse)
+
+		if err != nil {
+			return fmt.Errorf("pool reset of password for user %s failed, REDIS response %s, error, %s", username, sresponse, err)
+		}
+
+	case *radix.Cluster:
+		topo := db.(*radix.Cluster).Topo()
+		nodes := topo.Map()
+		for node := range nodes {
+			cl, err := db.(*radix.Cluster).Client(node)
+
+			err = cl.Do(radix.Cmd(&sresponse, "ACL", "SETUSER", username, "RESETPASS", ">" + password))
+
+			fmt.Printf("Response in changeUserPassword2: %s\n", sresponse)
+
+			if err != nil {
+				return fmt.Errorf("cluster reset of password for user %s on node %s failed, REDIS response %s, error, %s", username, node, sresponse, err)
+			}
+		}
 	}
 
 	return nil
@@ -235,12 +318,12 @@ func computeTimeout(ctx context.Context) (timeout time.Duration) {
 	return defaultTimeout
 }
 
-func (c *RedisDB) getConnection(ctx context.Context) (*radix.Pool, error) {
-	db, err := c.Connection(ctx)
+func (c *RedisDB) getConnection(ctx context.Context) (radix.Client, error) {
+	client, err := c.Connection(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return db.(*radix.Pool), nil
+	return client, nil
 }
 
 func (c *RedisDB) Type() (string, error) {

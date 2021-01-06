@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"strconv"
 	"testing"
 	"time"
 
@@ -24,7 +25,17 @@ const (
 )
 
 func prepareRedisTestContainer(t *testing.T) (func(), string, int) {
+	if os.Getenv("REDIS_CLUSTER") != "" {
+		return func() {}, os.Getenv("REDIS_CLUSTER"), -1
+		}
 	if os.Getenv("REDIS_HOST") != "" {
+		if os.Getenv("REDIS_PORT") != "" {
+			p, err := strconv.Atoi(os.Getenv("REDIS_PORT"))
+			if err != nil {
+				t.Fatalf("Failed to parse REDIS_PORT: %s", err)
+			}
+			return func() {}, os.Getenv("REDIS_HOST"), p
+		}
 		return func() {}, os.Getenv("REDIS_HOST"), 6379
 	}
 	// redver should match a redis repository tag. Default to latest.
@@ -177,11 +188,17 @@ func setupRedisDBInitialize(t *testing.T, connectionDetails map[string]interface
 func testRedisDBInitialize_NoTLS(t *testing.T, host string, port int) {
 	t.Log("Testing plain text Init()")
 
-	// address  = fmt.Sprintf("redis://%s:%d", host, port) // [todo] remove?
-
+	var cluster_hosts []string;
+	
+	if port == -1 {
+		cluster_hosts = strings.Split(host, ",")
+		host = ""
+	}
+	
 	connectionDetails := map[string]interface{}{
 		"host":     host,
 		"port":     port,
+		"cluster":  cluster_hosts,
 		"username": adminUsername,
 		"password": adminPassword,
 	}
@@ -199,9 +216,20 @@ func testRedisDBCreateUser(t *testing.T, address string, port int) {
 	}
 	t.Log("Testing CreateUser()")
 
+	var cluster_hosts []string;
+	host := address
+	rule := ""
+	
+	if port == -1 {
+		cluster_hosts = strings.Split(address, ",")
+		host = ""
+		rule = `["+cluster"]`
+	}
+
 	connectionDetails := map[string]interface{}{
-		"host":     address,
+		"host":     host,
 		"port":     port,
+		"cluster":  cluster_hosts,
 		"username": adminUsername,
 		"password": adminPassword,
 	}
@@ -229,7 +257,7 @@ func testRedisDBCreateUser(t *testing.T, address string, port int) {
 			RoleName:    "test",
 		},
 		Statements: dbplugin.Statements{
-			Commands: []string{},
+			Commands: []string{rule},
 		},
 		Password:   password,
 		Expiration: time.Now().Add(time.Minute),
@@ -258,9 +286,20 @@ func checkCredsExist(t *testing.T, username, password, address string, port int)
 	}
 	t.Log("Testing checkCredsExist()")
 
+	var cluster_hosts []string;
+	host := address
+	//rule := ""
+	
+	if port == -1 {
+		cluster_hosts = strings.Split(address, ",")
+		host = ""
+		//rule = `["+cluster"]`
+	}
+
 	connectionDetails := map[string]interface{}{
-		"host":     address,
+		"host":     host,
 		"port":     port,
+		"cluster":  cluster_hosts,
 		"username": username,
 		"password": password,
 	}
@@ -291,9 +330,20 @@ func checkRuleAllowed(t *testing.T, username, password, address string, port int
 	}
 	t.Log("Testing checkRuleAllowed()")
 
+	var cluster_hosts []string;
+	host := address
+	//rule := ""
+	
+	if port == -1 {
+		cluster_hosts = strings.Split(address, ",")
+		host = ""
+	//	rule = `["+cluster"]`
+	}
+
 	connectionDetails := map[string]interface{}{
-		"host":     address,
+		"host":     host,
 		"port":     port,
+		"cluster":  cluster_hosts,
 		"username": username,
 		"password": password,
 	}
@@ -313,7 +363,7 @@ func checkRuleAllowed(t *testing.T, username, password, address string, port int
 		t.Fatal("Database should be initialized")
 	}
 	var response string
-	err = db.pool.Do(radix.Cmd(&response, cmd, rules...))
+	err = db.client.Do(radix.Cmd(&response, cmd, rules...))
 
 	return err
 }
@@ -324,14 +374,22 @@ func revokeUser(t *testing.T, username, address string, port int) error {
 	}
 	t.Log("Testing RevokeUser()")
 
+	var cluster_hosts []string;
+	host := address
+	//rule := ""
+	
+	if port == -1 {
+		cluster_hosts = strings.Split(address, ",")
+		host = ""
+		//rule = `["+cluster"]`
+	}
+
 	connectionDetails := map[string]interface{}{
-		"host":    address,
+		"host":    host,
 		"port":     port,
+		"cluster":  cluster_hosts,
 		"username": adminUsername,
 		"password": adminPassword,
-	}
-	if pre6dot5 {
-		connectionDetails["bucket_name"] = aclCat
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -364,9 +422,20 @@ func testRedisDBCreateUser_DefaultRule(t *testing.T, address string, port int) {
 	}
 	t.Log("Testing CreateUser_DefaultRule()")
 
+	var cluster_hosts []string;
+	host := address
+	//rule := ""
+	
+	if port == -1 {
+		cluster_hosts = strings.Split(address, ",")
+		host = ""
+		//rule = `["+cluster"]`
+	}
+
 	connectionDetails := map[string]interface{}{
-		"host":     address,
+		"host":     host,
 		"port":     port,
+		"cluster":  cluster_hosts,
 		"username": adminUsername,
 		"password": adminPassword,
 	}
@@ -395,7 +464,7 @@ func testRedisDBCreateUser_DefaultRule(t *testing.T, address string, port int) {
 			RoleName:    username,
 		},
 		Statements: dbplugin.Statements{
-			Commands: []string{},
+			Commands: []string{`["~foo", "+@read", "+cluster"]`},
 		},
 		Password:   password,
 		Expiration: time.Now().Add(time.Minute),
@@ -411,7 +480,7 @@ func testRedisDBCreateUser_DefaultRule(t *testing.T, address string, port int) {
 	}
 	rules := []string{"foo"}
 	if err := checkRuleAllowed(t, userResp.Username, password, address, port, "get", rules); err != nil {
-		t.Fatalf("get failed with +@read rule: %s", err)
+		t.Fatalf("get failed for user %s with +@read rule: %s", userResp.Username, err)
 	}
 
 	rules = []string{"foo", "bar"}
@@ -433,9 +502,20 @@ func testRedisDBCreateUser_plusRole(t *testing.T, address string, port int) {
 	}
 	t.Log("Testing CreateUser_plusRole()")
 
+	var cluster_hosts []string;
+	host := address
+	//rule := ""
+	
+	if port == -1 {
+		cluster_hosts = strings.Split(address, ",")
+		host = ""
+		//rule = `["+cluster"]`
+	}
+
 	connectionDetails := map[string]interface{}{
-		"host":             address,
+		"host":             host,
 		"port":             port,
+		"cluster":          cluster_hosts,
 		"username":         adminUsername,
 		"password":         adminPassword,
 		"protocol_version": 4,
@@ -495,6 +575,16 @@ func testRedisDBCreateUser_groupOnly(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
+
+	var cluster_hosts []string;
+	host := address
+	//rule := ""
+	
+	if port == -1 {
+		cluster_hosts = strings.Split(host, ",")
+		host = ""
+	}
+
 	if pre6dot5 {
 		t.Log("Skipping as groups are not supported pre6.5.0")
 		t.SkipNow()
@@ -502,8 +592,9 @@ func testRedisDBCreateUser_groupOnly(t *testing.T, address string, port int) {
 	t.Log("Testing CreateUser_groupOnly()")
 
 	connectionDetails := map[string]interface{}{
-		"host":             address,
+		"host":             host,
 		"port":             port,
+		"cluster":          cluster_hosts,
 		"username":         adminUsername,
 		"password":         adminPassword,
 		"protocol_version": 4,
@@ -561,6 +652,16 @@ func testRedisDBCreateUser_roleAndGroup(t *testing.T, address string, port int) 
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
+
+	var cluster_hosts []string;
+	host := address
+	//rule := ""
+
+	if port == -1 {
+		cluster_hosts = strings.Split(address, ",")
+		host = ""
+	}
+
 	if pre6dot5 {
 		t.Log("Skipping as groups are not supported pre6.5.0")
 		t.SkipNow()
@@ -568,8 +669,9 @@ func testRedisDBCreateUser_roleAndGroup(t *testing.T, address string, port int) 
 	t.Log("Testing CreateUser_roleAndGroup()")
 
 	connectionDetails := map[string]interface{}{
-		"host":             address,
+		"host":             host,
 		"port":             port,
+		"cluster":          cluster_hosts,
 		"username":         adminUsername,
 		"password":         adminPassword,
 		"protocol_version": 4,
@@ -629,14 +731,21 @@ func testRedisDBRotateRootCredentials(t *testing.T, address string, port int) {
 	}
 	t.Log("Testing RotateRootCredentials()")
 
+	var cluster_hosts []string;
+	host := address
+	//rule := ""
+	
+	if port == -1 {
+		cluster_hosts = strings.Split(address, ",")
+		host = ""
+	}
+
 	connectionDetails := map[string]interface{}{
-		"host":     address,
+		"host":     host,
 		"port":     port,
+		"cluster":  cluster_hosts,
 		"username": "rotate-root",
 		"password": "rotate-rootpassword",
-	}
-	if pre6dot5 {
-		connectionDetails["bucket_name"] = aclCat
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -680,14 +789,21 @@ func doRedisDBSetCredentials(t *testing.T, username, password, address string, p
 
 	t.Log("Testing SetCredentials()")
 
+	var cluster_hosts []string;
+	host := address
+	//rule := ""
+	
+	if port == -1 {
+		cluster_hosts = strings.Split(address, ",")
+		host = ""
+	}
+
 	connectionDetails := map[string]interface{}{
-		"host":     address,
+		"host":     host,
 		"port":     port,
+		"cluster":  cluster_hosts,
 		"username": adminUsername,
 		"password": adminPassword,
-	}
-	if pre6dot5 {
-		connectionDetails["bucket_name"] = aclCat
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -739,12 +855,12 @@ func doRedisDBSetCredentials(t *testing.T, username, password, address string, p
 	}
 }
 
-func testRedisDBSetCredentials(t *testing.T, address string, port int) {
+func testRedisDBSetCredentials(t *testing.T, host string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
 
-	doRedisDBSetCredentials(t, "vault-edu", "password", address, port)
+	doRedisDBSetCredentials(t, "vault-edu", "password", host, port)
 }
 
 func testConnectionProducerSecretValues(t *testing.T) {
