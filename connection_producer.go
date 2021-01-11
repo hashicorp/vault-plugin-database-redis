@@ -79,10 +79,6 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 		return nil, fmt.Errorf("password cannot be empty")
 	}
 
-	if len(c.Cluster) != 0 {
-		fmt.Printf("We are connecting to a cluster...\n")
-	}
-	
 	c.Addr = fmt.Sprintf("%s:%d", c.Host, c.Port)
 	
 	c.Initialized = true
@@ -93,11 +89,6 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 			c.close()
 			return nil, errwrap.Wrapf("error verifying connection: {{err}}", err)
 		}
-		/*var pong string
-		if err = c.client.Do(radix.Cmd(&pong, "PING", "PONG")); err != nil {
-			c.close()
-			return nil, errwrap.Wrapf("error verifying connection: PONG failed: {{err}}", err)
-		}*/
 	}
 
 	return initConfig, nil
@@ -132,10 +123,10 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (radix.Clien
 	}
 
 	if len(c.Cluster) != 0 {
-		cluster_hosts := strings.Split(c.Cluster, ",")
-		c.client, err =  radix.NewCluster(cluster_hosts, radix.ClusterPoolFunc(poolFunc))
+		hosts := strings.Split(c.Cluster, ",")
+		c.client, err =  radix.NewCluster(hosts, radix.ClusterPoolFunc(poolFunc))
 		if err != nil {
-			return nil, errwrap.Wrapf(fmt.Sprintf("error in Cluster connection %d %#v: {{err}}", len(c.Cluster), c.Cluster), err)
+			return nil, errwrap.Wrapf(fmt.Sprintf("error in Cluster connection %v: {{err}}", hosts), err)
 		}
 	} else {
 		c.client, err = radix.NewPool("tcp", c.Addr, 1, radix.PoolConnFunc(customConnFunc)) // [TODO] poolopts for timeout from ctx??

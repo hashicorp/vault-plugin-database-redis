@@ -125,10 +125,8 @@ func (c *RedisDB) DeleteUser(ctx context.Context, req dbplugin.DeleteUserRequest
 
 	case *radix.Pool:
 		err = db.Do(radix.Cmd(&response, "ACL", "DELUSER", req.Username))
-		fmt.Printf("Response in pool DeleteUser: %s\n", response)
-	
 		if err != nil {
-			return dbplugin.DeleteUserResponse{}, err
+			return dbplugin.DeleteUserResponse{}, fmt.Errorf("response from pool DeleteUser: %s, error: %w", response, err)
 		}
 	case *radix.Cluster:
 		topo := db.(*radix.Cluster).Topo()
@@ -136,15 +134,12 @@ func (c *RedisDB) DeleteUser(ctx context.Context, req dbplugin.DeleteUserRequest
 		for node := range nodes {
 			cl, err := db.(*radix.Cluster).Client(node)
 			err = cl.Do(radix.Cmd(&response, "ACL", "DELUSER", req.Username))
-			fmt.Printf("Response in cluster DeleteUser: %s\n", response)
-			
 			if err != nil {
-				return dbplugin.DeleteUserResponse{}, err
+				return dbplugin.DeleteUserResponse{}, fmt.Errorf("response from cluster node %s for DeleteUser: %s, error: %w", node, response, err)
 			}
 			
 		}
 	}
-
 	return dbplugin.DeleteUserResponse{}, nil
 }
 
@@ -153,7 +148,7 @@ func newUser(ctx context.Context, db radix.Client, username string, req dbplugin
 	if len(statements) == 0 {
 		statements = append(statements, defaultRedisUserRule)
 	}
-
+	// setup REDIS command
 	aclargs := []string{"SETUSER", username, "ON", ">" + req.Password}
 
 	var args []string
@@ -162,18 +157,14 @@ func newUser(ctx context.Context, db radix.Client, username string, req dbplugin
 		return errwrap.Wrapf("error unmarshalling REDIS rules in the creation statement JSON: {{err}}", err)
 	}
 
-	fmt.Printf("Unmarshaled: %v\n", args)
-	fmt.Printf("statements %#v %s\n", statements, statements)
-
+	// append the additional rules/permissions
 	aclargs = append(aclargs, args...)
-	fmt.Printf("Appended args: %v\n", aclargs)
-	fmt.Printf("Client type is %T\n", db)
+
 	var response string
 
 	switch db.(type) {
 
 	case *radix.Pool:
-	//	err = db.Do(radix.Cmd(&response, "ACL", "SETUSER", username, "on", ">" + req.Password, args...))
 		err = db.Do(radix.Cmd(&response, "ACL", aclargs...))
 
 		fmt.Printf("Response in newUser: %s\n", response)
