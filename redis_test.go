@@ -114,12 +114,13 @@ func TestDriver(t *testing.T) {
 	}
 
 	t.Run("Init", func(t *testing.T) { testRedisDBInitialize_NoTLS(t, host, port) })
+	t.Run("Init", func(t *testing.T) { testRedisDBInitialize_persistence(t, host, port) })
 
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser(t, host, port) })
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_DefaultRule(t, host, port) })
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_plusRole(t, host, port) })
-	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_groupOnly(t, host, port) })
-	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_roleAndGroup(t, host, port) })
+	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_persist(t, host, port) })
+	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreate_persistConfig(t, host, port) })
 	t.Run("Rotate", func(t *testing.T) { testRedisDBRotateRootCredentials(t, host, port) })
 	t.Run("Creds", func(t *testing.T) { testRedisDBSetCredentials(t, host, port) })
 	t.Run("Secret", func(t *testing.T) { testConnectionProducerSecretValues(t) })
@@ -175,7 +176,62 @@ func testRedisDBInitialize_NoTLS(t *testing.T, host string, port int) {
 	}
 
 }
+func testRedisDBInitialize_persistence(t *testing.T, host string, port int) {
+	t.Log("Testing plain text Init() with persistence_mode")
 
+	var cluster_hosts string;
+
+	if port == -1 {
+		cluster_hosts = host
+		host = ""
+	}
+
+	connectionDetails := map[string]interface{}{
+		"host":     host,
+		"port":     port,
+		"cluster":  cluster_hosts,
+		"username": adminUsername,
+		"password": adminPassword,
+		"persistence_mode": "garbage",
+	}
+	
+	err := setupRedisDBInitialize(t, connectionDetails)
+
+	if err == nil {
+		t.Fatalf("Testing Init() should have failed as the perstence_mode is garbage.")
+	}
+	
+	connectionDetails = map[string]interface{}{
+		"host":     host,
+		"port":     port,
+		"cluster":  cluster_hosts,
+		"username": adminUsername,
+		"password": adminPassword,
+		"persistence_mode": "rewrite",
+	}
+	
+	err = setupRedisDBInitialize(t, connectionDetails)
+
+	if err != nil {
+		t.Fatalf("Testing Init() with perstence_mode rewrite failed: %s.", err)
+	}
+	
+	connectionDetails = map[string]interface{}{
+		"host":     host,
+		"port":     port,
+		"cluster":  cluster_hosts,
+		"username": adminUsername,
+		"password": adminPassword,
+		"persistence_mode": "aclfile",
+	}
+	
+	err = setupRedisDBInitialize(t, connectionDetails)
+
+	if err != nil {
+		t.Fatalf("Testing Init() with perstence_mode is aclfile failed: %s", err)
+	}
+
+}
 func testRedisDBCreateUser(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
@@ -521,7 +577,7 @@ func testRedisDBCreateUser_plusRole(t *testing.T, address string, port int) {
 }
 
 // g1 & g2 must exist in the database.
-func testRedisDBCreateUser_groupOnly(t *testing.T, address string, port int) {
+func testRedisDBCreateUser_persist(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
@@ -534,7 +590,7 @@ func testRedisDBCreateUser_groupOnly(t *testing.T, address string, port int) {
 		host = ""
 	}
 
-	t.Log("Testing CreateUser_groupOnly needs to be replaced as REDIS does not have groups()")
+	t.Log("Testing CreateUser_persist()")
 
 	connectionDetails := map[string]interface{}{
 		"host":             host,
@@ -542,7 +598,7 @@ func testRedisDBCreateUser_groupOnly(t *testing.T, address string, port int) {
 		"cluster":          cluster_hosts,
 		"username":         adminUsername,
 		"password":         adminPassword,
-		"protocol_version": 4,
+		"persistence_mode": "aclfile",
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -590,7 +646,7 @@ func testRedisDBCreateUser_groupOnly(t *testing.T, address string, port int) {
 		t.Fatalf("Could not revoke user: %s", userResp.Username)
 	}
 }
-func testRedisDBCreateUser_roleAndGroup(t *testing.T, address string, port int) {
+func testRedisDBCreate_persistConfig(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
@@ -603,7 +659,7 @@ func testRedisDBCreateUser_roleAndGroup(t *testing.T, address string, port int) 
 		host = ""
 	}
 
-	t.Log("Testing CreateUser_roleAndGroup() needs to be replaced.")
+	t.Log("Testing Create_persistConfig()")
 
 	connectionDetails := map[string]interface{}{
 		"host":             host,
@@ -611,6 +667,7 @@ func testRedisDBCreateUser_roleAndGroup(t *testing.T, address string, port int) 
 		"cluster":          cluster_hosts,
 		"username":         adminUsername,
 		"password":         adminPassword,
+		"persistence_mode": "REWRITE",
 	}
 
 	initReq := dbplugin.InitializeRequest{

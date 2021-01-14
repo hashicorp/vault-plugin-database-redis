@@ -82,7 +82,7 @@ func (c *RedisDB) NewUser(ctx context.Context, req dbplugin.NewUserRequest) (dbp
 		return dbplugin.NewUserResponse{}, fmt.Errorf("failed to get connection: %w", err)
 	}
 
-	err = newUser(ctx, db, username, req)
+	err = newUser(ctx, db, username, c.getPersistenceMode(), req)
 	if err != nil {
 		return dbplugin.NewUserResponse{}, err
 	}
@@ -126,8 +126,14 @@ func (c *RedisDB) DeleteUser(ctx context.Context, req dbplugin.DeleteUserRequest
 	case *radix.Pool:
 		err = db.Do(radix.Cmd(&response, "ACL", "DELUSER", req.Username))
 		if err != nil {
-			return dbplugin.DeleteUserResponse{}, fmt.Errorf("response from pool DeleteUser: %s, error: %w", response, err)
+			return dbplugin.DeleteUserResponse{}, errwrap.Wrapf(fmt.Sprintf("response from pool DeleteUser: %s, error: {{err}}", response), err)
 		}
+		err = persistChange(db, c.Persistence)
+		
+		if err != nil {
+			return dbplugin.DeleteUserResponse{}, errwrap.Wrapf("error persisting DeleteUser: {{err}}", err)
+		}
+
 	case *radix.Cluster:
 		topo := db.(*radix.Cluster).Topo()
 		nodes := topo.Map()
@@ -135,15 +141,20 @@ func (c *RedisDB) DeleteUser(ctx context.Context, req dbplugin.DeleteUserRequest
 			cl, err := db.(*radix.Cluster).Client(node)
 			err = cl.Do(radix.Cmd(&response, "ACL", "DELUSER", req.Username))
 			if err != nil {
-				return dbplugin.DeleteUserResponse{}, fmt.Errorf("response from cluster node %s for DeleteUser: %s, error: %w", node, response, err)
+				return dbplugin.DeleteUserResponse{}, errwrap.Wrapf(fmt.Sprintf("response from cluster node %s for DeleteUser: %s, error: {{err}}", node, response), err)
 			}
-			
+			err = persistChange(cl, c.Persistence)
+		
+			if err != nil {
+				return dbplugin.DeleteUserResponse{}, errwrap.Wrapf(fmt.Sprintf("error persisting DeleteUser on node %s: {{err}}", node), err)
+			}
+
 		}
 	}
 	return dbplugin.DeleteUserResponse{}, nil
 }
 
-func newUser(ctx context.Context, db radix.Client, username string, req dbplugin.NewUserRequest) error {
+func newUser(ctx context.Context, db radix.Client, username, mode string, req dbplugin.NewUserRequest) error {
 	statements := removeEmpty(req.Statements.Commands)
 	if len(statements) == 0 {
 		statements = append(statements, defaultRedisUserRule)
@@ -167,24 +178,31 @@ func newUser(ctx context.Context, db radix.Client, username string, req dbplugin
 	case *radix.Pool:
 		err = db.Do(radix.Cmd(&response, "ACL", aclargs...))
 
-		fmt.Printf("Response in newUser: %s\n", response)
-	
 		if err != nil {
-			return err
+			return errwrap.Wrapf(fmt.Sprintf("Response in pool newUser: %s, error: {{err}}", response), err)
 		}
+
+		err = persistChange(db, mode)
+		
+		if err != nil {
+			return errwrap.Wrapf("persist error for pool: {{err}}", err)
+		}
+			
 	case *radix.Cluster:
 		topo := db.(*radix.Cluster).Topo()
 		nodes := topo.Map()
 		for node := range nodes {
 			cl, err := db.(*radix.Cluster).Client(node)
 			err = cl.Do(radix.Cmd(&response, "ACL", aclargs...))
-
-			fmt.Printf("Response in cluster newUser: %s\n", response)
 			
 			if err != nil {
-				return err
+				return errwrap.Wrapf(fmt.Sprintf("Response in cluster newUser: %s for node %s, error: {{err}}", node, response), err)
 			}
-			
+			err = persistChange(cl, mode)
+		
+			if err != nil {
+				return errwrap.Wrapf(fmt.Sprintf("persist error for node %s: {{err}}", node), err)
+			}
 		}
 	}
 	
@@ -211,7 +229,7 @@ func (c *RedisDB) changeUserPassword(ctx context.Context, username, password str
 	var response resp2.Array
 	var redisErr resp2.Error
 	mn := radix.MaybeNil{Rcv: &response}
-	
+	// check the user exists before attempting a password change
 	switch db.(type) {
 
 	case *radix.Pool:
@@ -235,12 +253,6 @@ func (c *RedisDB) changeUserPassword(ctx context.Context, username, password str
 		nodes := topo.Map()
 		for node := range nodes {
 			cl, err := db.(*radix.Cluster).Client(node)
-			//err = cl.Do(radix.Cmd(&response, "ACL", "DELUSER", req.Username))
-			//fmt.Printf("Response in cluster DeleteUser: %s\n", response)
-			
-			//if err != nil {
-			//	return dbplugin.DeleteUserResponse{}, err
-			//}
 			err = cl.Do(radix.Cmd(&mn, "ACL", "GETUSER", username))
 			if errors.As(err, &redisErr) {
 				fmt.Printf("redis error returned: %s", redisErr.E)
@@ -256,18 +268,22 @@ func (c *RedisDB) changeUserPassword(ctx context.Context, username, password str
 			}
 		}
 	}
-
+	// go ahead an change the password
 	var sresponse string
 	switch db.(type) {
 
 	case *radix.Pool:
 		err = db.Do(radix.Cmd(&sresponse, "ACL", "SETUSER", username, "RESETPASS", ">" + password))
 
-		fmt.Printf("Response in changeUserPassword2: %s\n", sresponse)
-
 		if err != nil {
-			return fmt.Errorf("pool reset of password for user %s failed, REDIS response %s, error, %s", username, sresponse, err)
+			return errwrap.Wrapf(fmt.Sprintf("pool reset of password for user %s failed, REDIS response %s, error, {{err}}", username, sresponse), err)
 		}
+		err = persistChange(db, c.Persistence)
+		
+		if err != nil {
+			return errwrap.Wrapf("error persisting password change: {{err}}", err)
+		}
+
 
 	case *radix.Cluster:
 		topo := db.(*radix.Cluster).Topo()
@@ -277,10 +293,13 @@ func (c *RedisDB) changeUserPassword(ctx context.Context, username, password str
 
 			err = cl.Do(radix.Cmd(&sresponse, "ACL", "SETUSER", username, "RESETPASS", ">" + password))
 
-			fmt.Printf("Response in changeUserPassword2: %s\n", sresponse)
-
 			if err != nil {
-				return fmt.Errorf("cluster reset of password for user %s on node %s failed, REDIS response %s, error, %s", username, node, sresponse, err)
+				return errwrap.Wrapf(fmt.Sprintf("cluster reset of password for user %s on node %s failed, REDIS response %s, error, {{err}}", username, node, sresponse), err)
+			}
+			err = persistChange(cl, c.Persistence)
+		
+			if err != nil {
+				return errwrap.Wrapf(fmt.Sprintf("error persisting password change on node %s: {{err}}", node), err)
 			}
 		}
 	}
@@ -317,6 +336,26 @@ func (c *RedisDB) getConnection(ctx context.Context) (radix.Client, error) {
 	return client, nil
 }
 
+func (c *RedisDB) getPersistenceMode() (string) {
+	return c.Persistence
+}
+
 func (c *RedisDB) Type() (string, error) {
 	return redisTypeName, nil
+}
+
+func persistChange(client radix.Client, pmode string) (error) {
+	var response string
+	var err error
+	switch pmode {
+	case "REWRITE":
+		err = client.Do(radix.Cmd(&response, "CONFIG", "REWRITE"))
+	case "ACLFILE":
+		err = client.Do(radix.Cmd(&response, "ACL", "SAVE"))
+	}
+	if err != nil {
+		return errwrap.Wrapf(fmt.Sprintf("error from persistChange() response: %s, error: {{err}}", response), err)
+	}
+
+	return nil
 }

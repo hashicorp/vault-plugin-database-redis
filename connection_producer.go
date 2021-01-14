@@ -27,7 +27,7 @@ type redisDBConnectionProducer struct {
 	TLS         bool   `json:"tls"`
 	InsecureTLS bool   `json:"insecure_tls"`
 	Base64Pem   string `json:"base64pem"`
-	BucketName  string `json:"bucket_name"`
+	Persistence string `json:"persistence_mode"`
 
 	Initialized bool
 	rawConfig   map[string]interface{}
@@ -84,6 +84,13 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 	c.Initialized = true
 	c.Connected = false
 
+	if len(c.Persistence) != 0 {
+		c.Persistence = strings.ToUpper(c.Persistence)
+		if c.Persistence != "REWRITE" && "ACLFILE" != c.Persistence {
+			return nil, fmt.Errorf("persistence_mode can only be 'REWRITE' or 'ACLFILE', not %s", c.Persistence)
+		}
+	}
+	
 	if verifyConnection {
 		if _, err := c.Connection(ctx); err != nil {
 			c.close()
