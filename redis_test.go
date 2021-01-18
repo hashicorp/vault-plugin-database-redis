@@ -22,7 +22,12 @@ const (
 	aclCat        = "+@admin"
 )
 
+var redis_tls = false
+
 func prepareRedisTestContainer(t *testing.T) (func(), string, int) {
+	if os.Getenv("REDIS_TLS") != "" {
+		redis_tls = true
+	}
 	if os.Getenv("REDIS_CLUSTER") != "" {
 		return func() {}, os.Getenv("REDIS_CLUSTER"), -1
 		}
@@ -97,17 +102,17 @@ func TestDriver(t *testing.T) {
 
 	defer cleanup()
 
-	err := createUser(host, port, "default", "", "Administrator", "password",
+	err := createUser(host, port, redis_tls, caCrt, "default", "", "Administrator", "password",
 		aclCat)
 	if err != nil {
 		t.Fatalf("Failed to create Administrator user using 'default' user: %s", err)
 	}
-	err = createUser(host, port, adminUsername, adminPassword, "rotate-root", "rotate-rootpassword",
+	err = createUser(host, port, redis_tls, caCrt, adminUsername, adminPassword, "rotate-root", "rotate-rootpassword",
 		aclCat)
 	if err != nil {
 		t.Fatalf("Failed to create rotate-root test user: %s", err)
 	}
-	err = createUser(host, port, adminUsername, adminPassword, "vault-edu", "password",
+	err = createUser(host, port, redis_tls, caCrt, adminUsername, adminPassword, "vault-edu", "password",
 		aclCat)
 	if err != nil {
 		t.Fatalf("Failed to create vault-edu test user: %s", err)
@@ -115,6 +120,7 @@ func TestDriver(t *testing.T) {
 
 	t.Run("Init", func(t *testing.T) { testRedisDBInitialize_NoTLS(t, host, port) })
 	t.Run("Init", func(t *testing.T) { testRedisDBInitialize_persistence(t, host, port) })
+	t.Run("Init", func(t *testing.T) { testRedisDBInitialize_TLS(t, host, port) })
 
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser(t, host, port) })
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_DefaultRule(t, host, port) })
@@ -152,6 +158,10 @@ func setupRedisDBInitialize(t *testing.T, connectionDetails map[string]interface
 }
 
 func testRedisDBInitialize_NoTLS(t *testing.T, host string, port int) {
+	if redis_tls {
+		t.Skip("skipping test in TLS mode")
+	}
+	
 	t.Log("Testing plain text Init()")
 
 	var cluster_hosts string;
@@ -176,7 +186,42 @@ func testRedisDBInitialize_NoTLS(t *testing.T, host string, port int) {
 	}
 
 }
+func testRedisDBInitialize_TLS(t *testing.T, host string, port int) {
+	if !redis_tls {
+		t.Skip("skipping test in plain text mode")
+	}
+
+	t.Log("Testing TLS Init()")
+
+	var cluster_hosts string;
+
+	if port == -1 {
+		cluster_hosts = host
+		host = ""
+	}
+
+
+	connectionDetails := map[string]interface{}{
+		"host":     host,
+		"port":     port,
+		"cluster":  cluster_hosts,
+		"username": adminUsername,
+		"password": adminPassword,
+		"tls":      true,
+		"cacrt":    caCrt,
+	}
+	err := setupRedisDBInitialize(t, connectionDetails)
+
+	if err != nil {
+		t.Fatalf("Testing TLS Init() failed: error: %s", err)
+	}
+
+}
 func testRedisDBInitialize_persistence(t *testing.T, host string, port int) {
+	if redis_tls {
+		t.Skip("skipping test in TLS mode")
+	}
+
 	t.Log("Testing plain text Init() with persistence_mode")
 
 	var cluster_hosts string;
@@ -256,6 +301,11 @@ func testRedisDBCreateUser(t *testing.T, address string, port int) {
 		"password": adminPassword,
 	}
 
+	if redis_tls {
+		connectionDetails["tls"] = true
+		connectionDetails["cacrt"] = caCrt
+	}
+		
 	initReq := dbplugin.InitializeRequest{
 		Config:           connectionDetails,
 		VerifyConnection: true,
@@ -324,6 +374,12 @@ func checkCredsExist(t *testing.T, username, password, address string, port int)
 		"password": password,
 	}
 
+	if redis_tls {
+		connectionDetails["tls"] = true
+		connectionDetails["cacrt"] = caCrt
+	}
+
+
 	initReq := dbplugin.InitializeRequest{
 		Config:           connectionDetails,
 		VerifyConnection: true,
@@ -362,6 +418,11 @@ func checkRuleAllowed(t *testing.T, username, password, address string, port int
 		"cluster":  cluster_hosts,
 		"username": username,
 		"password": password,
+	}
+
+	if redis_tls {
+		connectionDetails["tls"] = true
+		connectionDetails["cacrt"] = caCrt
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -404,6 +465,11 @@ func revokeUser(t *testing.T, username, address string, port int) error {
 		"cluster":  cluster_hosts,
 		"username": adminUsername,
 		"password": adminPassword,
+	}
+
+	if redis_tls {
+		connectionDetails["tls"] = true
+		connectionDetails["cacrt"] = caCrt
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -450,6 +516,11 @@ func testRedisDBCreateUser_DefaultRule(t *testing.T, address string, port int) {
 		"cluster":  cluster_hosts,
 		"username": adminUsername,
 		"password": adminPassword,
+	}
+
+	if redis_tls {
+		connectionDetails["tls"] = true
+		connectionDetails["cacrt"] = caCrt
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -530,6 +601,11 @@ func testRedisDBCreateUser_plusRole(t *testing.T, address string, port int) {
 		"password":         adminPassword,
 	}
 
+	if redis_tls {
+		connectionDetails["tls"] = true
+		connectionDetails["cacrt"] = caCrt
+	}
+
 	initReq := dbplugin.InitializeRequest{
 		Config:           connectionDetails,
 		VerifyConnection: true,
@@ -601,6 +677,11 @@ func testRedisDBCreateUser_persist(t *testing.T, address string, port int) {
 		"persistence_mode": "aclfile",
 	}
 
+	if redis_tls {
+		connectionDetails["tls"] = true
+		connectionDetails["cacrt"] = caCrt
+	}
+
 	initReq := dbplugin.InitializeRequest{
 		Config:           connectionDetails,
 		VerifyConnection: true,
@@ -670,6 +751,11 @@ func testRedisDBCreate_persistConfig(t *testing.T, address string, port int) {
 		"persistence_mode": "REWRITE",
 	}
 
+	if redis_tls {
+		connectionDetails["tls"] = true
+		connectionDetails["cacrt"] = caCrt
+	}
+
 	initReq := dbplugin.InitializeRequest{
 		Config:           connectionDetails,
 		VerifyConnection: true,
@@ -737,6 +823,11 @@ func testRedisDBRotateRootCredentials(t *testing.T, address string, port int) {
 		"password": "rotate-rootpassword",
 	}
 
+	if redis_tls {
+		connectionDetails["tls"] = true
+		connectionDetails["cacrt"] = caCrt
+	}
+
 	initReq := dbplugin.InitializeRequest{
 		Config:           connectionDetails,
 		VerifyConnection: true,
@@ -792,6 +883,11 @@ func doRedisDBSetCredentials(t *testing.T, username, password, address string, p
 		"cluster":  cluster_hosts,
 		"username": adminUsername,
 		"password": adminPassword,
+	}
+
+	if redis_tls {
+		connectionDetails["tls"] = true
+		connectionDetails["cacrt"] = caCrt
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -880,3 +976,4 @@ func testComputeTimeout(t *testing.T) {
 const testRedisRole = `["%s"]`
 const testRedisGroup = `["+@all"]`
 const testRedisRoleAndGroup = `["%s"]`
+const caCrt = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURMRENDQWhTZ0F3SUJBZ0lVZWlJdWtVYUJmWkx3V3VGbkVUdm5ITG5oeUJZd0RRWUpLb1pJaHZjTkFRRUwKQlFBd0V6RVJNQThHQTFVRUF4TUliWGt0Y21Wa2FYTXdIaGNOTWpFd01URTBNVGt4TnpBM1doY05Nakl3TVRFMApNVGt4TnpNMldqQVRNUkV3RHdZRFZRUURFd2h0ZVMxeVpXUnBjekNDQVNJd0RRWUpLb1pJaHZjTkFRRUJCUUFECmdnRVBBRENDQVFvQ2dnRUJBTGV4QUsvZVF0c0M5bW1yQU81U0t5NHV4cU5YMUJ5eTFybTJvODBna0NRTUFiK0sKVk9tUDN0bEtnRlI3YmZCcEF0Z3hUMTdlWXhxQkRNeTdVY3lxdVIrSXdNaTJPT0tJWjdIZ3J2QzI4WHdLdDZ6RAptVXk0OUJSOFREQmU1QTI3ZnpwajUxbnN5a09aNkNpMGlXZldwaDUvR0FNQ1JibjVTdWRMKy9OcnFCL1Q4bElCCmNmUktVejFVN0VWdWY1MkYyVHU0UlU4R054dGpUdllub2dmQkM2bXJjR3UxblVYNWprOTkwcFpid05aUmpMTHkKTnpSblZPY2swVjE5TTMrSEtnbGYzWFZNLzJiUWczaGxnZ0EvTEFOWlBtUVgxN3hMSGlka05IbFNVRWpTTUUvdgpzeVEwc201dUxKdG56WUxXdXhLNkdSVG5pWmNmWjZodXIwbWM3OTBDQXdFQUFhTjRNSFl3RGdZRFZSMFBBUUgvCkJBUURBZ0VHTUE4R0ExVWRFd0VCL3dRRk1BTUJBZjh3SFFZRFZSME9CQllFRk5ueUdFdmZCS3lTS1RQaW1wMDUKSVVXaktRbHBNQjhHQTFVZEl3UVlNQmFBRk5ueUdFdmZCS3lTS1RQaW1wMDVJVVdqS1FscE1CTUdBMVVkRVFRTQpNQXFDQ0cxNUxYSmxaR2x6TUEwR0NTcUdTSWIzRFFFQkN3VUFBNElCQVFDd1RoRmlDcWpPTXNEYmYxTExCRDF2CnlCUE5zZzBxdzlLeEVFY2hleldrcUgrWlBIVTIvV3Y2TklETTV0MnZNOUhnUUVHRnlubGEwb3Z2dkE3U2tselEKY0hINVVHdVk0UFpnb1NLTjAxRDNCTkJObHB4b3h0b0VSQXFpMWhzRVlYb2VmcnArdEtkNHlzdTJ5cWFGWnNwNwpwenlJMTNSWVE4b1czUWZpeVovUzlEcittdWJhQnZHRE5PZ3k3K05HajNWdjBKRW51cTZGNTlQc2VhZWZ5QWRHCmlWSExqQjlDRVV6Z0t4Nk1NQWZTbXBjUVo3RnhTcDNzaE9haUp0QkZkZWk0WTBnNHp3Q3U4S1NqVDdJOGdPOVkKbEZTVVZCSzZpeG1FOFFzay9vcXN0bDl5L3E1UkFRNHpIbFI0b3c2c3VEdm52SFJzcWtjME52UXNpbTlhL1lmYwotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0t"

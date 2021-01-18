@@ -2,13 +2,14 @@ package redis
 
 import (
 	"context"
-//	"crypto/x509"
-//	"encoding/base64"
+	"crypto/x509"
+	"crypto/tls"
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
-
+	
 	"github.com/mediocregopher/radix/v3"
 	"github.com/hashicorp/errwrap"
 	"github.com/hashicorp/vault/sdk/database/helper/connutil"
@@ -26,7 +27,7 @@ type redisDBConnectionProducer struct {
 	Password    string `json:"password"`
 	TLS         bool   `json:"tls"`
 	InsecureTLS bool   `json:"insecure_tls"`
-	Base64Pem   string `json:"base64pem"`
+	CaCrt       string `json:"cacrt"`
 	Persistence string `json:"persistence_mode"`
 
 	Initialized bool
@@ -90,6 +91,12 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 			return nil, fmt.Errorf("persistence_mode can only be 'REWRITE' or 'ACLFILE', not %s", c.Persistence)
 		}
 	}
+
+	if c.TLS {
+                if len(c.CaCrt) == 0 {
+                        return nil, fmt.Errorf("cacrt cannot be empty")
+                }
+	}
 	
 	if verifyConnection {
 		if _, err := c.Connection(ctx); err != nil {
@@ -117,12 +124,37 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (radix.Clien
 		return c.client, nil
 	}
 	var err error
+	var pem []byte
+	var customConnFunc radix.ConnFunc
+	
+	if c.TLS {
+                pem, err = base64.StdEncoding.DecodeString(c.CaCrt)
+                if err != nil {
+                        return nil, errwrap.Wrapf("error decoding CaCrt: {{err}}", err)
+                }
+                rootCAs := x509.NewCertPool()
+                ok := rootCAs.AppendCertsFromPEM([]byte(pem))
+                if !ok {
+                        return nil, fmt.Errorf("failed to parse root certificate")
+                }
+		customConnFunc = func(network, addr string) (radix.Conn, error) {
+			return radix.Dial(network, addr,
+				radix.DialTimeout(1 * time.Minute),
+				radix.DialAuthUser(c.Username, c.Password),
+				radix.DialUseTLS(&tls.Config{
+					RootCAs: rootCAs,
+					InsecureSkipVerify: true,
+				}),
+			)
+                }
+        } else {
 
-	customConnFunc := func(network, addr string) (radix.Conn, error) {
-		return radix.Dial(network, addr,
-			radix.DialTimeout(1 * time.Minute),
-			radix.DialAuthUser(c.Username, c.Password),
-		)
+		customConnFunc = func(network, addr string) (radix.Conn, error) {
+			return radix.Dial(network, addr,
+				radix.DialTimeout(1 * time.Minute),
+				radix.DialAuthUser(c.Username, c.Password),
+			)
+		}
 	}
 
 	poolFunc := func(network, addr string) (radix.Client, error) {

@@ -1,8 +1,10 @@
 package redis
 
 import (
-//	"encoding/base64"
-//	"encoding/json"
+	"encoding/base64"
+	//	"encoding/json"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 //	"io/ioutil"
 //	"net/http"
@@ -16,13 +18,37 @@ import (
 //	"github.com/hashicorp/go-version"
 )
 
-func createUser(hostname string, port int, adminuser, adminpassword, username, password, aclRule string) (err error) {
+func createUser(hostname string, port int, redis_tls bool, caCrt, adminuser, adminpassword, username, password, aclRule string) (err error) {
+	
+	pem, err := base64.StdEncoding.DecodeString(caCrt)
+	if err != nil {
+		return errwrap.Wrapf("error decoding CaCrt: {{err}}", err)
+	}
+	rootCAs := x509.NewCertPool()
+	ok := rootCAs.AppendCertsFromPEM([]byte(pem))
+	if !ok {
+		return fmt.Errorf("failed to parse root certificate")
+	}
+	var customConnFunc radix.ConnFunc
 
-	customConnFunc := func(network, addr string) (radix.Conn, error) {
-		return radix.Dial(network, addr,
-			radix.DialTimeout(1 * time.Minute),
-			radix.DialAuthUser(adminuser, adminpassword),
-		)
+	if redis_tls {
+		customConnFunc = func(network, addr string) (radix.Conn, error) {
+			return radix.Dial(network, addr,
+				radix.DialTimeout(1 * time.Minute),
+				radix.DialAuthUser(adminuser, adminpassword),
+				radix.DialUseTLS(&tls.Config{
+					RootCAs: rootCAs,
+					InsecureSkipVerify: true,
+				}),
+			)
+		}
+	} else {
+		customConnFunc = func(network, addr string) (radix.Conn, error) {
+			return radix.Dial(network, addr,
+				radix.DialTimeout(1 * time.Minute),
+				radix.DialAuthUser(adminuser, adminpassword),
+			)
+		}
 	}
 
 	poolFunc := func(network, addr string) (radix.Client, error) {
@@ -88,5 +114,3 @@ func createUser(hostname string, port int, adminuser, adminpassword, username, p
 
 	return nil
 }
-
-
