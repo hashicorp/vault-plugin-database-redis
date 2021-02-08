@@ -114,3 +114,55 @@ func createUser(hostname string, port int, redis_tls bool, caCrt, adminuser, adm
 
 	return nil
 }
+func checkPersistenceMode(hostname string, port int, redis_tls bool, caCrt, adminuser, adminpassword string) (err error, mode string) {
+
+	var response []string
+	var client radix.Client
+	
+	if port == -1 {
+		client, err = getRedisClient(hostname, "", port, redis_tls, caCrt, adminuser, adminpassword)
+	} else {
+		client, err = getRedisClient("", hostname, port, redis_tls, caCrt, adminuser, adminpassword)
+	}
+	if err != nil {
+		return errwrap.Wrapf("error connecting to redis in checkPersistenceMode: {{err}}", err), ""
+	}
+	
+	if port == -1 {
+		topo := client.(*radix.Cluster).Topo()
+		nodes := topo.Map()
+		for key := range nodes {
+			cl, err := client.(*radix.Cluster).Client(key)
+			if err != nil {
+				return err, ""
+			}
+			err = cl.Do(radix.Cmd(&response, "CONFIG", "GET", "ACLFILE"))
+			if err != nil {
+				return err, ""
+			}
+		}
+
+	} else {
+	
+		err = client.Do(radix.Cmd(&response, "CONFIG", "GET", "ACLFILE"))
+		
+		fmt.Printf("Response in client createUser: %d\n", len(response))
+
+		if err != nil {
+			return err, ""
+		}
+
+	}
+
+	fmt.Printf("Client is of type %T, response is %v\n", client, response)
+
+	if client != nil {
+		if err = client.Close(); err != nil {
+			return err, ""
+		}
+	}
+
+
+	return err, "some mode"
+
+}

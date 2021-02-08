@@ -196,3 +196,57 @@ func (c *redisDBConnectionProducer) Close() error {
 
 	return c.close()
 }
+
+// Handle connecting to REDIS node or cluster
+func getRedisClient(cluster, hostname string, port int, useTls bool, caCrt, username, password string) (client radix.Client, err error) {
+	var customConnFunc radix.ConnFunc
+	
+	if useTls {
+                pem, err := base64.StdEncoding.DecodeString(caCrt)
+                if err != nil {
+                        return nil, errwrap.Wrapf("error decoding CaCrt: {{err}}", err)
+                }
+                rootCAs := x509.NewCertPool()
+                ok := rootCAs.AppendCertsFromPEM([]byte(pem))
+                if !ok {
+                        return nil, fmt.Errorf("failed to parse root certificate")
+                }
+		customConnFunc = func(network, addr string) (radix.Conn, error) {
+			return radix.Dial(network, addr,
+				radix.DialTimeout(1 * time.Minute),
+				radix.DialAuthUser(username, password),
+				radix.DialUseTLS(&tls.Config{
+					RootCAs: rootCAs,
+					InsecureSkipVerify: true,
+				}),
+			)
+                }
+        } else {
+
+		customConnFunc = func(network, addr string) (radix.Conn, error) {
+			return radix.Dial(network, addr,
+				radix.DialTimeout(1 * time.Minute),
+				radix.DialAuthUser(username, password),
+			)
+		}
+	}
+
+	poolFunc := func(network, addr string) (radix.Client, error) {
+		return radix.NewPool(network, addr, 1, radix.PoolConnFunc(customConnFunc))
+	}
+
+	if len(cluster) != 0 {
+		hosts := strings.Split(cluster, ",")
+		client, err =  radix.NewCluster(hosts, radix.ClusterPoolFunc(poolFunc))
+		if err != nil {
+			return nil, errwrap.Wrapf(fmt.Sprintf("error in Cluster connection %v: {{err}}", hosts), err)
+		}
+	} else {
+		addr := fmt.Sprintf("%s:%d", hostname, port)
+		client, err = radix.NewPool("tcp", addr, 1, radix.PoolConnFunc(customConnFunc)) // [TODO] poolopts for timeout from ctx??
+		if err != nil {
+			return nil, errwrap.Wrapf("error in pool Connection: {{err}}", err)
+		}
+	}
+	return client, nil
+}

@@ -23,6 +23,7 @@ const (
 )
 
 var redis_tls = false
+var redis_container = false
 
 func prepareRedisTestContainer(t *testing.T) (func(), string, int) {
 	if os.Getenv("REDIS_TLS") != "" {
@@ -93,6 +94,7 @@ func prepareRedisTestContainer(t *testing.T) (func(), string, int) {
 		cleanup()
 	}
 	time.Sleep(3 * time.Second)
+	redis_container = true
 	return cleanup, "0.0.0.0", 6379
 }
 
@@ -102,7 +104,11 @@ func TestDriver(t *testing.T) {
 
 	defer cleanup()
 
-	err := createUser(host, port, redis_tls, caCrt, "default", "", "Administrator", "password",
+	err, _ := checkPersistenceMode(host, port, redis_tls, caCrt, "default", "")
+	if err != nil {
+		t.Fatalf("Failed to check persistence mode: %s", err)
+	}
+	err = createUser(host, port, redis_tls, caCrt, "default", "", "Administrator", "password",
 		aclCat)
 	if err != nil {
 		t.Fatalf("Failed to create Administrator user using 'default' user: %s", err)
@@ -125,7 +131,7 @@ func TestDriver(t *testing.T) {
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser(t, host, port) })
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_DefaultRule(t, host, port) })
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_plusRole(t, host, port) })
-	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_persist(t, host, port) })
+	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_persistAclFile(t, host, port) })
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreate_persistConfig(t, host, port) })
 	t.Run("Rotate", func(t *testing.T) { testRedisDBRotateRootCredentials(t, host, port) })
 	t.Run("Creds", func(t *testing.T) { testRedisDBSetCredentials(t, host, port) })
@@ -273,7 +279,7 @@ func testRedisDBInitialize_persistence(t *testing.T, host string, port int) {
 	err = setupRedisDBInitialize(t, connectionDetails)
 
 	if err != nil {
-		t.Fatalf("Testing Init() with perstence_mode is aclfile failed: %s", err)
+		t.Fatalf("Testing Init() with perstence_mode aclfile failed: %s", err)
 	}
 
 }
@@ -653,9 +659,13 @@ func testRedisDBCreateUser_plusRole(t *testing.T, address string, port int) {
 }
 
 // g1 & g2 must exist in the database.
-func testRedisDBCreateUser_persist(t *testing.T, address string, port int) {
+func testRedisDBCreateUser_persistAclFile(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
+	}
+
+	if redis_container == false {
+		t.Skip("Skipping persist config as REDIS container is not configured to use an acl file.")
 	}
 
 	var cluster_hosts string;
@@ -730,6 +740,10 @@ func testRedisDBCreateUser_persist(t *testing.T, address string, port int) {
 func testRedisDBCreate_persistConfig(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
+	}
+
+	if redis_container == false {
+		t.Skip("skipping persist config as REDIS container is not configured to use an config file.")
 	}
 
 	var cluster_hosts string;
