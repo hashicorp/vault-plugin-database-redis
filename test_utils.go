@@ -95,15 +95,11 @@ func createUser(hostname string, port int, redis_tls bool, caCrt, adminuser, adm
 	
 		err = client.Do(radix.Cmd(&response, "ACL", "SETUSER", username, "on", ">" + password, aclRule))
 		
-		fmt.Printf("Response in client createUser: %s\n", response)
-
 		if err != nil {
 			return err
 		}
 
 	}
-
-	fmt.Printf("Client is of type %T\n", client)
 
 	if client != nil {
 		if err = client.Close(); err != nil {
@@ -146,15 +142,11 @@ func checkPersistenceMode(hostname string, port int, redis_tls bool, caCrt, admi
 	
 		err = client.Do(radix.Cmd(&response, "CONFIG", "GET", "ACLFILE"))
 		
-		fmt.Printf("Response in client createUser: %d\n", len(response))
-
 		if err != nil {
 			return err, ""
 		}
 
 	}
-
-	fmt.Printf("Client is of type %T, response is %v\n", client, response)
 
 	if client != nil {
 		if err = client.Close(); err != nil {
