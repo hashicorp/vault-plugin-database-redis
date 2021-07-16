@@ -664,7 +664,7 @@ func testRedisDBCreateUser_persistAclFile(t *testing.T, address string, port int
 		t.SkipNow()
 	}
 
-	if redis_container == false {
+	if redis_container == true {
 		t.Skip("Skipping persist config as REDIS container is not configured to use an acl file.")
 	}
 
@@ -742,7 +742,7 @@ func testRedisDBCreate_persistConfig(t *testing.T, address string, port int) {
 		t.SkipNow()
 	}
 
-	if redis_container == false {
+	if redis_container == true {
 		t.Skip("skipping persist config as REDIS container is not configured to use an config file.")
 	}
 
