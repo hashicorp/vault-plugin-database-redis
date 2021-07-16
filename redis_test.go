@@ -108,7 +108,7 @@ func TestDriver(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to check persistence mode: %s", err)
 	}
-	err = createUser(host, port, redis_tls, caCrt, "default", "", "Administrator", "password",
+	err = createUser(host, port, redis_tls, caCrt, "default", "", adminUsername, adminPassword,
 		aclCat)
 	if err != nil {
 		t.Fatalf("Failed to create Administrator user using 'default' user: %s", err)
