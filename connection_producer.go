@@ -237,6 +237,7 @@ func getRedisClient(cluster, hostname string, port int, useTls bool, caCrt, user
 
 	if len(cluster) != 0 {
 		hosts := strings.Split(cluster, ",")
+		fmt.Println("HOSTS: %V", hosts)
 		client, err =  radix.NewCluster(hosts, radix.ClusterPoolFunc(poolFunc))
 		if err != nil {
 			return nil, errwrap.Wrapf(fmt.Sprintf("error in Cluster connection %v: {{err}}", hosts), err)

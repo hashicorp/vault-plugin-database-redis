@@ -165,7 +165,7 @@ func setupRedisDBInitialize(t *testing.T, connectionDetails map[string]interface
 
 func testRedisDBInitialize_NoTLS(t *testing.T, host string, port int) {
 	if redis_tls {
-		t.Skip("skipping test in TLS mode")
+		t.Skip("skipping plain text Init() test in TLS mode")
 	}
 	
 	t.Log("Testing plain text Init()")
@@ -194,7 +194,7 @@ func testRedisDBInitialize_NoTLS(t *testing.T, host string, port int) {
 }
 func testRedisDBInitialize_TLS(t *testing.T, host string, port int) {
 	if !redis_tls {
-		t.Skip("skipping test in plain text mode")
+		t.Skip("skipping TLS Init() test in plain text mode")
 	}
 
 	t.Log("Testing TLS Init()")
@@ -225,7 +225,7 @@ func testRedisDBInitialize_TLS(t *testing.T, host string, port int) {
 }
 func testRedisDBInitialize_persistence(t *testing.T, host string, port int) {
 	if redis_tls {
-		t.Skip("skipping test in TLS mode")
+		t.Skip("skipping plain text Init() with persistence_mode test in TLS mode")
 	}
 
 	t.Log("Testing plain text Init() with persistence_mode")
