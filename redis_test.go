@@ -8,9 +8,8 @@ import (
 	"testing"
 	"time"
 
-	//	"github.com/cenkalti/backoff"
-	"github.com/mediocregopher/radix/v3"
-	dbplugin "github.com/hashicorp/vault/sdk/database/dbplugin/v5"
+	"github.com/hashicorp/vault/sdk/database/dbplugin/v5"
+	"github.com/mediocregopher/radix/v4"
 	"github.com/ory/dockertest"
 	dc "github.com/ory/dockertest/docker"
 )
@@ -20,9 +19,9 @@ var pre6dot5 = false // check for Pre 6.5.0 Redis
 const (
 	defaultUsername = "default"
 	defaultPassword = ""
-	adminUsername = "Administrator"
-	adminPassword = "password"
-	aclCat        = "+@admin"
+	adminUsername   = "Administrator"
+	adminPassword   = "password"
+	aclCat          = "+@admin"
 )
 
 func prepareRedisTestContainer(t *testing.T) (func(), string, int) {
@@ -71,10 +70,12 @@ func prepareRedisTestContainer(t *testing.T) (func(), string, int) {
 
 	if err = pool.Retry(func() error {
 		t.Log("Waiting for the database to start...")
-		_, err := radix.NewPool("tcp", address, 1) 
+		poolConfig := radix.PoolConfig{}
+		_, err := poolConfig.New(context.Background(), "tcp", address)
 		if err != nil {
 			return err
 		}
+
 		return nil
 	}); err != nil {
 		t.Fatalf("Could not connect to redis: %s", err)
@@ -87,7 +88,6 @@ func prepareRedisTestContainer(t *testing.T) (func(), string, int) {
 func TestDriver(t *testing.T) {
 	// Spin up redis
 	cleanup, host, port := prepareRedisTestContainer(t)
-
 	defer cleanup()
 
 	err := createUser(host, port, defaultUsername, defaultPassword, "Administrator", "password",
@@ -315,7 +315,7 @@ func checkRuleAllowed(t *testing.T, username, password, address string, port int
 		t.Fatal("Database should be initialized")
 	}
 	var response string
-	err = db.pool.Do(radix.Cmd(&response, cmd, rules...))
+	err = db.client.Do(context.Background(), radix.Cmd(&response, cmd, rules...))
 
 	return err
 }
@@ -327,7 +327,7 @@ func revokeUser(t *testing.T, username, address string, port int) error {
 	t.Log("Testing RevokeUser()")
 
 	connectionDetails := map[string]interface{}{
-		"host":    address,
+		"host":     address,
 		"port":     port,
 		"username": adminUsername,
 		"password": adminPassword,
