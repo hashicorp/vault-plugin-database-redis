@@ -152,8 +152,7 @@ func newUser(ctx context.Context, db radix.Client, username string, req dbplugin
 	aclargs = append(aclargs, args...)
 	fmt.Printf("Appended args: %v\n", aclargs)
 	var response string
-
-	//	err = db.Do(radix.Cmd(&response, "ACL", "SETUSER", username, "on", ">" + req.Password, args...))
+	
 	err = db.Do(ctx, radix.Cmd(&response, "ACL", aclargs...))
 
 	fmt.Printf("Response in newUser: %s\n", response)

@@ -2,8 +2,6 @@ package redis
 
 import (
 	"context"
-	//	"crypto/x509"
-	//	"encoding/base64"
 	"fmt"
 	"strings"
 	"sync"
@@ -83,8 +81,8 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 			return nil, fmt.Errorf("base64pem cannot be empty")
 		}
 
-		if !strings.HasPrefix(c.Host, "couchbases://") {
-			return nil, fmt.Errorf("hosts list must start with couchbases:// for TLS connection")
+		if !strings.HasPrefix(c.Host, "redis://") {
+			return nil, fmt.Errorf("hosts list must start with redis:// for TLS connection")
 		}
 	}
 
@@ -95,11 +93,6 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 			c.close()
 			return nil, errwrap.Wrapf("error verifying connection: {{err}}", err)
 		}
-		/*var pong string
-		if err = c.pool.Do(radix.Cmd(&pong, "PING", "PONG")); err != nil {
-			c.close()
-			return nil, errwrap.Wrapf("error verifying connection: PONG failed: {{err}}", err)
-		}*/
 	}
 
 	return initConfig, nil
