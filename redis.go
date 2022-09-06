@@ -182,8 +182,7 @@ func (c *RedisDB) changeUserPassword(ctx context.Context, username, password str
 		}
 	}()
 
-	// TODO(milena): does this []string work?
-	var response []string
+	var response resp3.ArrayHeader
 	mn := radix.Maybe{Rcv: &response}
 	var redisErr resp3.SimpleError
 	err = db.Do(ctx, radix.Cmd(&mn, "ACL", "GETUSER", username))
