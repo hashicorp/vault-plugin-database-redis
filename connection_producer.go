@@ -2,28 +2,25 @@ package redis
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/base64"
 	"fmt"
-	"strings"
 	"sync"
 
-	"github.com/hashicorp/errwrap"
 	"github.com/hashicorp/vault/sdk/database/helper/connutil"
 	"github.com/mediocregopher/radix/v4"
 	"github.com/mitchellh/mapstructure"
 )
 
 type redisDBConnectionProducer struct {
-	PublicKey   string `json:"public_key"`
-	PrivateKey  string `json:"private_key"`
-	ProjectID   string `json:"project_id"`
-	Host        string `json:"host"`
-	Port        int    `json:"port"`
-	Username    string `json:"username"`
-	Password    string `json:"password"`
-	TLS         bool   `json:"tls"`
-	InsecureTLS bool   `json:"insecure_tls"`
-	Base64Pem   string `json:"base64pem"`
-	BucketName  string `json:"bucket_name"`
+	Host      string `json:"host"`
+	Port      int    `json:"port"`
+	Username  string `json:"username"`
+	Password  string `json:"password"`
+	TLS       bool   `json:"tls"`
+	Base64Pem string `json:"base64pem"`
+	CaCrt     string `json:"cacrt"`
 
 	Initialized bool
 	rawConfig   map[string]interface{}
@@ -77,12 +74,11 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 	c.Addr = fmt.Sprintf("%s:%d", c.Host, c.Port)
 
 	if c.TLS {
+		if len(c.CaCrt) == 0 {
+			return nil, fmt.Errorf("cacrt cannot be empty")
+		}
 		if len(c.Base64Pem) == 0 {
 			return nil, fmt.Errorf("base64pem cannot be empty")
-		}
-
-		if !strings.HasPrefix(c.Host, "redis://") {
-			return nil, fmt.Errorf("hosts list must start with redis:// for TLS connection")
 		}
 	}
 
@@ -91,7 +87,7 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 	if verifyConnection {
 		if _, err := c.Connection(ctx); err != nil {
 			c.close()
-			return nil, errwrap.Wrapf("error verifying connection: {{err}}", err)
+			return nil, fmt.Errorf("error verifying connection")
 		}
 	}
 
@@ -115,13 +111,40 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (interface{}
 		return c.client, nil
 	}
 	var err error
+	var pem []byte
+	var poolConfig radix.PoolConfig
 
-	poolConfig := radix.PoolConfig{
-		Dialer: radix.Dialer{
-			AuthUser: c.Username,
-			AuthPass: c.Password,
-		},
+	if c.TLS {
+		pem, err = base64.StdEncoding.DecodeString(c.CaCrt)
+		if err != nil {
+			return nil, fmt.Errorf("error decoding CaCrt")
+		}
+		rootCAs := x509.NewCertPool()
+		ok := rootCAs.AppendCertsFromPEM([]byte(pem))
+		if !ok {
+			return nil, fmt.Errorf("failed to parse root certificate")
+		}
+		poolConfig = radix.PoolConfig{
+			Dialer: radix.Dialer{
+				AuthUser: c.Username,
+				AuthPass: c.Password,
+				NetDialer: &tls.Dialer{
+					Config: &tls.Config{
+						RootCAs:            rootCAs,
+						InsecureSkipVerify: true,
+					},
+				},
+			},
+		}
+	} else {
+		poolConfig = radix.PoolConfig{
+			Dialer: radix.Dialer{
+				AuthUser: c.Username,
+				AuthPass: c.Password,
+			},
+		}
 	}
+
 	client, err := poolConfig.New(ctx, "tcp", c.Addr)
 	if err != nil {
 		return nil, err

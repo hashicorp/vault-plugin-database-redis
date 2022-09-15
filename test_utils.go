@@ -2,17 +2,46 @@ package redis
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/base64"
 	"fmt"
-
 	"github.com/mediocregopher/radix/v4"
 )
 
-func createUser(hostname string, port int, adminuser, adminpassword, username, password, aclRule string) (err error) {
-	poolConfig := radix.PoolConfig{
-		Dialer: radix.Dialer{
-			AuthUser: adminuser,
-			AuthPass: adminpassword,
-		},
+func createUser(hostname string, port int, redisTls bool, caCrt, adminuser, adminpassword, username, password, aclRule string) (err error) {
+	pem, err := base64.StdEncoding.DecodeString(caCrt)
+	if err != nil {
+		return fmt.Errorf("error decoding CaCrt")
+	}
+	rootCAs := x509.NewCertPool()
+	ok := rootCAs.AppendCertsFromPEM([]byte(pem))
+	if !ok {
+		return fmt.Errorf("failed to parse root certificate")
+	}
+
+	var poolConfig radix.PoolConfig
+
+	if redisTls {
+		poolConfig = radix.PoolConfig{
+			Dialer: radix.Dialer{
+				AuthUser: adminuser,
+				AuthPass: adminpassword,
+				NetDialer: &tls.Dialer{
+					Config: &tls.Config{
+						RootCAs:            rootCAs,
+						InsecureSkipVerify: true,
+					},
+				},
+			},
+		}
+	} else {
+		poolConfig = radix.PoolConfig{
+			Dialer: radix.Dialer{
+				AuthUser: adminuser,
+				AuthPass: adminpassword,
+			},
+		}
 	}
 
 	addr := fmt.Sprintf("%s:%d", hostname, port)
