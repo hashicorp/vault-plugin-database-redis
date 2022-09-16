@@ -14,12 +14,13 @@ import (
 )
 
 type redisDBConnectionProducer struct {
-	Host     string `json:"host"`
-	Port     int    `json:"port"`
-	Username string `json:"username"`
-	Password string `json:"password"`
-	TLS      bool   `json:"tls"`
-	CaCrt    string `json:"cacrt"`
+	Host        string `json:"host"`
+	Port        int    `json:"port"`
+	Username    string `json:"username"`
+	Password    string `json:"password"`
+	TLS         bool   `json:"tls"`
+	InsecureTLS bool   `json:"insecure_tls"`
+	CaCrt       string `json:"cacrt"`
 
 	Initialized bool
 	rawConfig   map[string]interface{}
@@ -127,7 +128,7 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (interface{}
 				NetDialer: &tls.Dialer{
 					Config: &tls.Config{
 						RootCAs:            rootCAs,
-						InsecureSkipVerify: true,
+						InsecureSkipVerify: c.InsecureTLS,
 					},
 				},
 			},

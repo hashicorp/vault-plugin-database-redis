@@ -91,6 +91,8 @@ func prepareRedisTestContainer(t *testing.T) (func(), string, int) {
 }
 
 func TestDriver(t *testing.T) {
+	caCrt := os.Getenv("CACRT")
+
 	// Spin up redis
 	cleanup, host, port := prepareRedisTestContainer(t)
 	defer cleanup()
@@ -125,7 +127,6 @@ func TestDriver(t *testing.T) {
 }
 
 func setupRedisDBInitialize(t *testing.T, connectionDetails map[string]interface{}) (err error) {
-
 	initReq := dbplugin.InitializeRequest{
 		Config:           connectionDetails,
 		VerifyConnection: true,
@@ -170,6 +171,8 @@ func testRedisDBInitialize_NoTLS(t *testing.T, host string, port int) {
 }
 
 func testRedisDBInitialize_TLS(t *testing.T, host string, port int) {
+	caCrt := os.Getenv("CACRT")
+
 	if !redisTls {
 		t.Skip("skipping TLS Init() test in plain text mode")
 	}
@@ -196,6 +199,8 @@ func testRedisDBCreateUser(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
+	caCrt := os.Getenv("CACRT")
+
 	t.Log("Testing CreateUser()")
 
 	connectionDetails := map[string]interface{}{
@@ -260,6 +265,8 @@ func checkCredsExist(t *testing.T, username, password, address string, port int)
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
+	caCrt := os.Getenv("CACRT")
+
 	t.Log("Testing checkCredsExist()")
 
 	connectionDetails := map[string]interface{}{
@@ -296,6 +303,8 @@ func checkRuleAllowed(t *testing.T, username, password, address string, port int
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
+	caCrt := os.Getenv("CACRT")
+
 	t.Log("Testing checkRuleAllowed()")
 
 	connectionDetails := map[string]interface{}{
@@ -334,6 +343,8 @@ func revokeUser(t *testing.T, username, address string, port int) error {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
+	caCrt := os.Getenv("CACRT")
+
 	t.Log("Testing RevokeUser()")
 
 	connectionDetails := map[string]interface{}{
@@ -376,6 +387,8 @@ func testRedisDBCreateUser_DefaultRule(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
+	caCrt := os.Getenv("CACRT")
+
 	t.Log("Testing CreateUser_DefaultRule()")
 
 	connectionDetails := map[string]interface{}{
@@ -450,6 +463,8 @@ func testRedisDBCreateUser_plusRole(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
+	caCrt := os.Getenv("CACRT")
+
 	t.Log("Testing CreateUser_plusRole()")
 
 	connectionDetails := map[string]interface{}{
@@ -516,6 +531,8 @@ func testRedisDBCreateUser_groupOnly(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
+	caCrt := os.Getenv("CACRT")
+
 	if pre6dot5 {
 		t.Log("Skipping as groups are not supported pre6.5.0")
 		t.SkipNow()
@@ -584,6 +601,8 @@ func testRedisDBCreateUser_roleAndGroup(t *testing.T, address string, port int) 
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
+	caCrt := os.Getenv("CACRT")
+
 	if pre6dot5 {
 		t.Log("Skipping as groups are not supported pre6.5.0")
 		t.SkipNow()
@@ -652,6 +671,8 @@ func testRedisDBRotateRootCredentials(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
+	caCrt := os.Getenv("CACRT")
+
 	t.Log("Testing RotateRootCredentials()")
 
 	connectionDetails := map[string]interface{}{
@@ -704,6 +725,7 @@ func testRedisDBRotateRootCredentials(t *testing.T, address string, port int) {
 }
 
 func doRedisDBSetCredentials(t *testing.T, username, password, address string, port int) {
+	caCrt := os.Getenv("CACRT")
 
 	t.Log("Testing SetCredentials()")
 
@@ -805,6 +827,3 @@ func testComputeTimeout(t *testing.T) {
 const testRedisRole = `["%s"]`
 const testRedisGroup = `["+@all"]`
 const testRedisRoleAndGroup = `["%s"]`
-
-// not sure about this? got the certificate from the redis cluster test
-const caCrt = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURMRENDQWhTZ0F3SUJBZ0lVZWlJdWtVYUJmWkx3V3VGbkVUdm5ITG5oeUJZd0RRWUpLb1pJaHZjTkFRRUwKQlFBd0V6RVJNQThHQTFVRUF4TUliWGt0Y21Wa2FYTXdIaGNOTWpFd01URTBNVGt4TnpBM1doY05Nakl3TVRFMApNVGt4TnpNMldqQVRNUkV3RHdZRFZRUURFd2h0ZVMxeVpXUnBjekNDQVNJd0RRWUpLb1pJaHZjTkFRRUJCUUFECmdnRVBBRENDQVFvQ2dnRUJBTGV4QUsvZVF0c0M5bW1yQU81U0t5NHV4cU5YMUJ5eTFybTJvODBna0NRTUFiK0sKVk9tUDN0bEtnRlI3YmZCcEF0Z3hUMTdlWXhxQkRNeTdVY3lxdVIrSXdNaTJPT0tJWjdIZ3J2QzI4WHdLdDZ6RAptVXk0OUJSOFREQmU1QTI3ZnpwajUxbnN5a09aNkNpMGlXZldwaDUvR0FNQ1JibjVTdWRMKy9OcnFCL1Q4bElCCmNmUktVejFVN0VWdWY1MkYyVHU0UlU4R054dGpUdllub2dmQkM2bXJjR3UxblVYNWprOTkwcFpid05aUmpMTHkKTnpSblZPY2swVjE5TTMrSEtnbGYzWFZNLzJiUWczaGxnZ0EvTEFOWlBtUVgxN3hMSGlka05IbFNVRWpTTUUvdgpzeVEwc201dUxKdG56WUxXdXhLNkdSVG5pWmNmWjZodXIwbWM3OTBDQXdFQUFhTjRNSFl3RGdZRFZSMFBBUUgvCkJBUURBZ0VHTUE4R0ExVWRFd0VCL3dRRk1BTUJBZjh3SFFZRFZSME9CQllFRk5ueUdFdmZCS3lTS1RQaW1wMDUKSVVXaktRbHBNQjhHQTFVZEl3UVlNQmFBRk5ueUdFdmZCS3lTS1RQaW1wMDVJVVdqS1FscE1CTUdBMVVkRVFRTQpNQXFDQ0cxNUxYSmxaR2x6TUEwR0NTcUdTSWIzRFFFQkN3VUFBNElCQVFDd1RoRmlDcWpPTXNEYmYxTExCRDF2CnlCUE5zZzBxdzlLeEVFY2hleldrcUgrWlBIVTIvV3Y2TklETTV0MnZNOUhnUUVHRnlubGEwb3Z2dkE3U2tselEKY0hINVVHdVk0UFpnb1NLTjAxRDNCTkJObHB4b3h0b0VSQXFpMWhzRVlYb2VmcnArdEtkNHlzdTJ5cWFGWnNwNwpwenlJMTNSWVE4b1czUWZpeVovUzlEcittdWJhQnZHRE5PZ3k3K05HajNWdjBKRW51cTZGNTlQc2VhZWZ5QWRHCmlWSExqQjlDRVV6Z0t4Nk1NQWZTbXBjUVo3RnhTcDNzaE9haUp0QkZkZWk0WTBnNHp3Q3U4S1NqVDdJOGdPOVkKbEZTVVZCSzZpeG1FOFFzay9vcXN0bDl5L3E1UkFRNHpIbFI0b3c2c3VEdm52SFJzcWtjME52UXNpbTlhL1lmYwotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0t"
