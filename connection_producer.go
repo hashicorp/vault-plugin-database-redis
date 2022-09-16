@@ -14,13 +14,12 @@ import (
 )
 
 type redisDBConnectionProducer struct {
-	Host      string `json:"host"`
-	Port      int    `json:"port"`
-	Username  string `json:"username"`
-	Password  string `json:"password"`
-	TLS       bool   `json:"tls"`
-	Base64Pem string `json:"base64pem"`
-	CaCrt     string `json:"cacrt"`
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	TLS      bool   `json:"tls"`
+	CaCrt    string `json:"cacrt"`
 
 	Initialized bool
 	rawConfig   map[string]interface{}
@@ -76,9 +75,6 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 	if c.TLS {
 		if len(c.CaCrt) == 0 {
 			return nil, fmt.Errorf("cacrt cannot be empty")
-		}
-		if len(c.Base64Pem) == 0 {
-			return nil, fmt.Errorf("base64pem cannot be empty")
 		}
 	}
 
