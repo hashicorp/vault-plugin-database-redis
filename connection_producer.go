@@ -4,8 +4,9 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"fmt"
+	"net"
+	"strconv"
 	"sync"
 
 	"github.com/hashicorp/vault/sdk/database/helper/connutil"
@@ -20,7 +21,7 @@ type redisDBConnectionProducer struct {
 	Password    string `json:"password"`
 	TLS         bool   `json:"tls"`
 	InsecureTLS bool   `json:"insecure_tls"`
-	CaCrt       string `json:"cacrt"`
+	CaCrt       string `json:"ca_crt"`
 
 	Initialized bool
 	rawConfig   map[string]interface{}
@@ -71,11 +72,11 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 		return nil, fmt.Errorf("password cannot be empty")
 	}
 
-	c.Addr = fmt.Sprintf("%s:%d", c.Host, c.Port)
+	c.Addr = net.JoinHostPort(c.Host, strconv.Itoa(c.Port))
 
 	if c.TLS {
 		if len(c.CaCrt) == 0 {
-			return nil, fmt.Errorf("cacrt cannot be empty")
+			return nil, fmt.Errorf("ca_crt cannot be empty")
 		}
 	}
 
@@ -84,7 +85,7 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 	if verifyConnection {
 		if _, err := c.Connection(ctx); err != nil {
 			c.close()
-			return nil, fmt.Errorf("error verifying connection")
+			return nil, fmt.Errorf("error verifying connection: %w", err)
 		}
 	}
 
@@ -108,14 +109,11 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (interface{}
 		return c.client, nil
 	}
 	var err error
-	var pem []byte
 	var poolConfig radix.PoolConfig
 
 	if c.TLS {
-		pem, err = base64.StdEncoding.DecodeString(c.CaCrt)
-		if err != nil {
-			return nil, fmt.Errorf("error decoding CaCrt")
-		}
+		var pem []byte
+
 		rootCAs := x509.NewCertPool()
 		ok := rootCAs.AppendCertsFromPEM([]byte(pem))
 		if !ok {
