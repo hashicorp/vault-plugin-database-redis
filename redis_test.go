@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"fmt"
 	"os"
 	"strings"
@@ -20,11 +19,14 @@ import (
 var pre6dot5 = false // check for Pre 6.5.0 Redis
 
 const (
-	defaultUsername = "default"
-	defaultPassword = ""
-	adminUsername   = "Administrator"
-	adminPassword   = "password"
-	aclCat          = "+@admin"
+	defaultUsername       = "default"
+	defaultPassword       = ""
+	adminUsername         = "Administrator"
+	adminPassword         = "password"
+	aclCat                = "+@admin"
+	testRedisRole         = `["%s"]`
+	testRedisGroup        = `["+@all"]`
+	testRedisRoleAndGroup = `["%s"]`
 )
 
 var redisTls = false
@@ -94,23 +96,23 @@ func prepareRedisTestContainer(t *testing.T) (func(), string, int) {
 }
 
 func TestDriver(t *testing.T) {
-	caCrt := os.Getenv("CACRT")
+	CACert := os.Getenv("CACert")
 
 	// Spin up redis
 	cleanup, host, port := prepareRedisTestContainer(t)
 	defer cleanup()
 
-	err := createUser(host, port, redisTls, caCrt, defaultUsername, defaultPassword, "Administrator", "password",
+	err := createUser(host, port, redisTls, CACert, defaultUsername, defaultPassword, "Administrator", "password",
 		aclCat)
 	if err != nil {
 		t.Fatalf("Failed to create Administrator user using 'default' user: %s", err)
 	}
-	err = createUser(host, port, redisTls, caCrt, adminUsername, adminPassword, "rotate-root", "rotate-rootpassword",
+	err = createUser(host, port, redisTls, CACert, adminUsername, adminPassword, "rotate-root", "rotate-rootpassword",
 		aclCat)
 	if err != nil {
 		t.Fatalf("Failed to create rotate-root test user: %s", err)
 	}
-	err = createUser(host, port, redisTls, caCrt, adminUsername, adminPassword, "vault-edu", "password",
+	err = createUser(host, port, redisTls, CACert, adminUsername, adminPassword, "vault-edu", "password",
 		aclCat)
 	if err != nil {
 		t.Fatalf("Failed to create vault-edu test user: %s", err)
@@ -174,7 +176,7 @@ func testRedisDBInitialize_NoTLS(t *testing.T, host string, port int) {
 }
 
 func testRedisDBInitialize_TLS(t *testing.T, host string, port int) {
-	caCrt := os.Getenv("CACRT")
+	CACert := os.Getenv("CACert")
 
 	if !redisTls {
 		t.Skip("skipping TLS Init() test in plain text mode")
@@ -188,7 +190,7 @@ func testRedisDBInitialize_TLS(t *testing.T, host string, port int) {
 		"username": adminUsername,
 		"password": adminPassword,
 		"tls":      true,
-		"cacrt":    caCrt,
+		"CACert":   CACert,
 	}
 	err := setupRedisDBInitialize(t, connectionDetails)
 
@@ -202,7 +204,7 @@ func testRedisDBCreateUser(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
-	caCrt := os.Getenv("CACRT")
+	CACert := os.Getenv("CACert")
 
 	t.Log("Testing CreateUser()")
 
@@ -215,7 +217,7 @@ func testRedisDBCreateUser(t *testing.T, address string, port int) {
 
 	if redisTls {
 		connectionDetails["tls"] = true
-		connectionDetails["cacrt"] = caCrt
+		connectionDetails["ca_cert"] = CACert
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -268,7 +270,7 @@ func checkCredsExist(t *testing.T, username, password, address string, port int)
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
-	caCrt := os.Getenv("CACRT")
+	CACert := os.Getenv("CACert")
 
 	t.Log("Testing checkCredsExist()")
 
@@ -281,7 +283,7 @@ func checkCredsExist(t *testing.T, username, password, address string, port int)
 
 	if redisTls {
 		connectionDetails["tls"] = true
-		connectionDetails["cacrt"] = caCrt
+		connectionDetails["ca_cert"] = CACert
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -306,7 +308,7 @@ func checkRuleAllowed(t *testing.T, username, password, address string, port int
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
-	caCrt := os.Getenv("CACRT")
+	CACert := os.Getenv("CACert")
 
 	t.Log("Testing checkRuleAllowed()")
 
@@ -319,7 +321,7 @@ func checkRuleAllowed(t *testing.T, username, password, address string, port int
 
 	if redisTls {
 		connectionDetails["tls"] = true
-		connectionDetails["cacrt"] = caCrt
+		connectionDetails["ca_cert"] = CACert
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -346,7 +348,7 @@ func revokeUser(t *testing.T, username, address string, port int) error {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
-	caCrt := os.Getenv("CACRT")
+	CACert := os.Getenv("CACert")
 
 	t.Log("Testing RevokeUser()")
 
@@ -359,7 +361,7 @@ func revokeUser(t *testing.T, username, address string, port int) error {
 
 	if redisTls {
 		connectionDetails["tls"] = true
-		connectionDetails["cacrt"] = caCrt
+		connectionDetails["ca_cert"] = CACert
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -390,7 +392,7 @@ func testRedisDBCreateUser_DefaultRule(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
-	caCrt := os.Getenv("CACRT")
+	CACert := os.Getenv("CACert")
 
 	t.Log("Testing CreateUser_DefaultRule()")
 
@@ -403,7 +405,7 @@ func testRedisDBCreateUser_DefaultRule(t *testing.T, address string, port int) {
 
 	if redisTls {
 		connectionDetails["tls"] = true
-		connectionDetails["cacrt"] = caCrt
+		connectionDetails["ca_cert"] = CACert
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -466,7 +468,7 @@ func testRedisDBCreateUser_plusRole(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
-	caCrt := os.Getenv("CACRT")
+	CACert := os.Getenv("CACert")
 
 	t.Log("Testing CreateUser_plusRole()")
 
@@ -480,7 +482,7 @@ func testRedisDBCreateUser_plusRole(t *testing.T, address string, port int) {
 
 	if redisTls {
 		connectionDetails["tls"] = true
-		connectionDetails["cacrt"] = caCrt
+		connectionDetails["ca_cert"] = CACert
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -534,7 +536,7 @@ func testRedisDBCreateUser_groupOnly(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
-	caCrt := os.Getenv("CACRT")
+	CACert := os.Getenv("CACert")
 
 	if pre6dot5 {
 		t.Log("Skipping as groups are not supported pre6.5.0")
@@ -552,7 +554,7 @@ func testRedisDBCreateUser_groupOnly(t *testing.T, address string, port int) {
 
 	if redisTls {
 		connectionDetails["tls"] = true
-		connectionDetails["cacrt"] = caCrt
+		connectionDetails["ca_cert"] = CACert
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -604,7 +606,7 @@ func testRedisDBCreateUser_roleAndGroup(t *testing.T, address string, port int) 
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
-	caCrt := os.Getenv("CACRT")
+	CACert := os.Getenv("CACert")
 
 	if pre6dot5 {
 		t.Log("Skipping as groups are not supported pre6.5.0")
@@ -622,7 +624,7 @@ func testRedisDBCreateUser_roleAndGroup(t *testing.T, address string, port int) 
 
 	if redisTls {
 		connectionDetails["tls"] = true
-		connectionDetails["cacrt"] = caCrt
+		connectionDetails["ca_cert"] = CACert
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -674,7 +676,7 @@ func testRedisDBRotateRootCredentials(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
-	caCrt := os.Getenv("CACRT")
+	CACert := os.Getenv("CACert")
 
 	t.Log("Testing RotateRootCredentials()")
 
@@ -687,7 +689,7 @@ func testRedisDBRotateRootCredentials(t *testing.T, address string, port int) {
 
 	if redisTls {
 		connectionDetails["tls"] = true
-		connectionDetails["cacrt"] = caCrt
+		connectionDetails["ca_cert"] = CACert
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -728,7 +730,7 @@ func testRedisDBRotateRootCredentials(t *testing.T, address string, port int) {
 }
 
 func doRedisDBSetCredentials(t *testing.T, username, password, address string, port int) {
-	caCrt := os.Getenv("CACRT")
+	CACert := os.Getenv("CACert")
 
 	t.Log("Testing SetCredentials()")
 
@@ -741,7 +743,7 @@ func doRedisDBSetCredentials(t *testing.T, username, password, address string, p
 
 	if redisTls {
 		connectionDetails["tls"] = true
-		connectionDetails["cacrt"] = caCrt
+		connectionDetails["ca_cert"] = CACert
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -827,13 +829,9 @@ func testComputeTimeout(t *testing.T) {
 	}
 }
 
-func createUser(hostname string, port int, redisTls bool, caCrt, adminuser, adminpassword, username, password, aclRule string) (err error) {
-	pem, err := base64.StdEncoding.DecodeString(caCrt)
-	if err != nil {
-		return fmt.Errorf("error decoding CaCrt")
-	}
+func createUser(hostname string, port int, redisTls bool, CACert, adminuser, adminpassword, username, password, aclRule string) (err error) {
 	rootCAs := x509.NewCertPool()
-	ok := rootCAs.AppendCertsFromPEM([]byte(pem))
+	ok := rootCAs.AppendCertsFromPEM([]byte(CACert))
 	if !ok {
 		return fmt.Errorf("failed to parse root certificate")
 	}
@@ -885,7 +883,3 @@ func createUser(hostname string, port int, redisTls bool, caCrt, adminuser, admi
 
 	return nil
 }
-
-const testRedisRole = `["%s"]`
-const testRedisGroup = `["+@all"]`
-const testRedisRoleAndGroup = `["%s"]`

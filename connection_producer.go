@@ -21,7 +21,7 @@ type redisDBConnectionProducer struct {
 	Password    string `json:"password"`
 	TLS         bool   `json:"tls"`
 	InsecureTLS bool   `json:"insecure_tls"`
-	CaCrt       string `json:"ca_crt"`
+	CACert      string `json:"ca_cert"`
 
 	Initialized bool
 	rawConfig   map[string]interface{}
@@ -75,8 +75,8 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 	c.Addr = net.JoinHostPort(c.Host, strconv.Itoa(c.Port))
 
 	if c.TLS {
-		if len(c.CaCrt) == 0 {
-			return nil, fmt.Errorf("ca_crt cannot be empty")
+		if len(c.CACert) == 0 {
+			return nil, fmt.Errorf("ca_cert cannot be empty")
 		}
 	}
 
@@ -112,10 +112,8 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (interface{}
 	var poolConfig radix.PoolConfig
 
 	if c.TLS {
-		var pem []byte
-
 		rootCAs := x509.NewCertPool()
-		ok := rootCAs.AppendCertsFromPEM([]byte(pem))
+		ok := rootCAs.AppendCertsFromPEM([]byte(c.CACert))
 		if !ok {
 			return nil, fmt.Errorf("failed to parse root certificate")
 		}
