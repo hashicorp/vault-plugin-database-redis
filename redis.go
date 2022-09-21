@@ -178,7 +178,7 @@ func (c *RedisDB) changeUserPassword(ctx context.Context, username, password str
 	var redisErr resp3.SimpleError
 	err = db.Do(ctx, radix.Cmd(&mn, "ACL", "GETUSER", username))
 	if errors.As(err, &redisErr) {
-		fmt.Errorf("redis error returned: %s", redisErr.S)
+		return fmt.Errorf("redis error returned: %s", redisErr.Error())
 	}
 
 	if err != nil {
