@@ -1,6 +1,6 @@
 PLUGIN_NAME := $(shell command ls cmd/)
 PLUGIN_DIR := $(HOME)/vault-plugins
-TEST_PATH := $(shell pwd)$(TEST_REDIS_CACERT_RELATIVE_PATH)
+TEST_REDIS_CACERT_PATH := $(shell pwd)$(TEST_REDIS_CACERT_RELATIVE_PATH)
 
 .PHONY: default
 default: dev
@@ -8,6 +8,7 @@ default: dev
 .PHONY: dev
 dev:
 	CGO_ENABLED=0 go build -o bin/$(PLUGIN_NAME) cmd/$(PLUGIN_NAME)/main.go
+	cp bin/$(PLUGIN_NAME) $(PLUGIN_DIR)/$(PLUGIN_NAME)
 
 .PHONY: test
 test:
@@ -15,7 +16,7 @@ test:
 
 .PHONY: testacc
 testacc:
-	ACC_TEST_ENABLED=1 CA_CERT_FILE=$(TEST_PATH) REDIS_HOST=$(TEST_REDIS_HOST) REDIS_TLS=true CGO_ENABLED=0 go test -v ./... $(TESTARGS) -timeout=20m
+	ACC_TEST_ENABLED=1 CA_CERT_FILE=$(TEST_REDIS_CACERT_PATH) REDIS_HOST=$(TEST_REDIS_HOST) REDIS_TLS=true CGO_ENABLED=0 go test -v ./... $(TESTARGS) -timeout=20m
 
 .PHONY: fmtcheck
 fmtcheck:
@@ -43,4 +44,4 @@ configure: dev
 	$(TEST_REDIS_PORT) \
 	$(TEST_REDIS_USERNAME) \
 	$(TEST_REDIS_PASSWORD) \
-	$(TEST_PATH)
+	$(TEST_REDIS_CACERT_PATH)
