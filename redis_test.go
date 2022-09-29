@@ -31,6 +31,12 @@ const (
 
 var redisTls = false
 
+func skipIfAccTestNotEnabled(t *testing.T) {
+	if _, ok := os.LookupEnv("ACC_TEST_ENABLED"); !ok {
+		t.Skip(fmt.Printf("Skipping accpetance test %s; ACC_TEST_ENABLED is not set.", t.Name()))
+	}
+}
+
 func prepareRedisTestContainer(t *testing.T) (func(), string, int) {
 	if os.Getenv("REDIS_TLS") != "" {
 		redisTls = true
@@ -96,6 +102,8 @@ func prepareRedisTestContainer(t *testing.T) (func(), string, int) {
 }
 
 func TestDriver(t *testing.T) {
+	skipIfAccTestNotEnabled(t)
+
 	CACertFile := os.Getenv("CA_CERT_FILE")
 	CACert, err := os.ReadFile(CACertFile)
 	if err != nil {
@@ -172,11 +180,9 @@ func testRedisDBInitialize_NoTLS(t *testing.T, host string, port int) {
 		"password": adminPassword,
 	}
 	err := setupRedisDBInitialize(t, connectionDetails)
-
 	if err != nil {
 		t.Fatalf("Testing Init() failed: error: %s", err)
 	}
-
 }
 
 func testRedisDBInitialize_TLS(t *testing.T, host string, port int) {
@@ -206,7 +212,6 @@ func testRedisDBInitialize_TLS(t *testing.T, host string, port int) {
 	if err != nil {
 		t.Fatalf("Testing TLS Init() failed: error: %s", err)
 	}
-
 }
 
 func testRedisDBCreateUser(t *testing.T, address string, port int) {
@@ -647,6 +652,7 @@ func testRedisDBCreateUser_groupOnly(t *testing.T, address string, port int) {
 		t.Fatalf("Could not revoke user: %s", userResp.Username)
 	}
 }
+
 func testRedisDBCreateUser_roleAndGroup(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
@@ -722,6 +728,7 @@ func testRedisDBCreateUser_roleAndGroup(t *testing.T, address string, port int) 
 		t.Fatalf("Could not revoke user: %s", userResp.Username)
 	}
 }
+
 func testRedisDBRotateRootCredentials(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
