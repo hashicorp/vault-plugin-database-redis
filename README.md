@@ -77,6 +77,10 @@ To set up the test container:
 $ make setup-env
 ...
 Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
+
+$ source ./bootstrap/terraform/local_environment_setup.sh
+
+$ make configure
 ```
 
 ### Environment Teardown
