@@ -10,7 +10,7 @@ resource "null_resource" "setup_redis_docker" {
 
 resource "local_file" "setup_environment_file" {
   filename = "local_environment_setup.sh"
-  content = <<EOF
+  content  = <<EOF
 export TEST_REDIS_HOST=localhost &&\
 export TEST_REDIS_PORT=6379 &&\
 export TEST_REDIS_USERNAME=default &&\
