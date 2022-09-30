@@ -60,7 +60,7 @@ Code: 400. Errors:
 
 ### Environment Set Up
 
-To test `go test` will execute a set of basic tests against the `docker.io/redis:latest` Redis database image. To test against different Redis images, for example 5.0-buster, set the `REDIS_VERSION=5.0-buster` environment variable. If you want to run the tests against a local Redis installation or an already running Redis container, set the environment variables `REDIS_HOST`, `REDIS_TLS`, `CA_CERT_FILE` before executing.
+To test `go test` will execute a set of basic tests against the `docker.io/redis:latest` Redis database image. To test against different Redis images, for example 5.0-buster, set the `REDIS_VERSION=5.0-buster` environment variable. If you want to run the tests against a local Redis installation or an already running Redis container, set the environment variables `REDIS_HOST` before executing, as well as `REDIS_TLS`, `CA_CERT_FILE` for acceptance tests.
 
 **Note:** The tests assume that the Redis database instance has a default user with the following ACL settings user default on `nopass ~* +@all`. If not you will need to align the Administrator username and password with the pre-set values in the [redis_test.go](https://github.com/hashicorp/vault-plugin-database-redis/blob/main/redis_test.go) file.
 
@@ -130,10 +130,15 @@ At this stage you are now ready to initialize the plugin to connect to the Redis
 
 Prior to initializing the plugin, ensure that you have created an administration account. Vault will use the user specified here to create/update/revoke database credentials. That user must have the appropriate rule `+@admin` to perform actions upon other database users.
 
+Export the certificate:
+```sh
+$ CACERT=$(cat /path/to/cacert)
+```
+
 ```sh
 $ vault write database/config/my-redis plugin_name="redis-database-plugin" \
         host="localhost" port=6379 username="Administrator" password="password" \
-        allowed_roles="my-redis-*-role"
+        allowed_roles="my-redis-*-role" tls=true insecure_tls=true ca_cert="$CACERT"
 
 # You should consider rotating the admin password. Note that if you do, the new password will never be made available
 # through Vault, so you should create a vault-specific database admin user for this.
