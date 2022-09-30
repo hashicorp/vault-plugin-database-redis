@@ -163,7 +163,7 @@ To retrieve the credentials for the dynamic accounts
 
 ```sh
 
-$vault read database/creds/my-redis-admin-role
+$ vault read database/creds/my-redis-admin-role
 Key                Value
 ---                -----
 lease_id           database/creds/my-redis-admin-role/OxCTXJcxQ2F4lReWPjbezSnA
