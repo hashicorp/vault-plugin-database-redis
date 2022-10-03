@@ -6,6 +6,7 @@ TEST_REDIS_PORT=$4
 TEST_REDIS_USERNAME=$5
 TEST_REDIS_PASSWORD=$6
 TEST_REDIS_CACERT_PATH=$7
+TEST_REDIS_TLS=$8
 
 LOCAL_PLUGIN_NAME=local-"$PLUGIN_NAME"
 PLUGIN_BINARY_LOCATION="$PLUGIN_DIR"/"$LOCAL_PLUGIN_NAME"
@@ -22,7 +23,6 @@ vault plugin register \
       -sha256="$(shasum -a 256 "$PLUGIN_BINARY_LOCATION" | awk '{print $1}')" \
       database "$LOCAL_PLUGIN_NAME"
 
-
 vault write database/config/local-redis \
         plugin_name="$LOCAL_PLUGIN_NAME" \
     	allowed_roles="*" \
@@ -31,5 +31,5 @@ vault write database/config/local-redis \
     	username="$TEST_REDIS_USERNAME" \
     	password="$TEST_REDIS_PASSWORD" \
     	ca_cert="$(cat "$TEST_REDIS_CACERT_PATH")" \
-    	tls=true \
+    	tls="$TEST_REDIS_TLS" \
     	insecure_tls=true

@@ -32,8 +32,7 @@ More details in the [Environment Set Up](#environment-set-up) section.
 ## Build
 
 To compile a development version of this plugin, run `make` or `make dev`.
-This will put the plugin binary in the `bin` and `$GOPATH/bin` folders. `dev`
-mode will only generate the binary for your platform and is faster:
+This will put the plugin binary in `$HOME/vault-plugins`.
 
 ```sh
 $ make dev
@@ -60,16 +59,15 @@ Code: 400. Errors:
 
 ### Environment Set Up
 
-To test `go test` will execute a set of basic tests against the `docker.io/redis:latest` Redis database image. To test against different Redis images, for example 5.0-buster, set the `REDIS_VERSION=5.0-buster` environment variable. If you want to run the tests against a local Redis installation or an already running Redis container, set the environment variables `REDIS_HOST` before executing, as well as `REDIS_TLS`, `CA_CERT_FILE` for acceptance tests.
+To test `go test` will execute a set of basic tests against the `docker.io/redis:latest` Redis database image. To test against different Redis images, for example 5.0-buster, set the `REDIS_VERSION=5.0-buster` environment variable.
 
-**Note:** The tests assume that the Redis database instance has a default user with the following ACL settings user default on `nopass ~* +@all`. If not you will need to align the Administrator username and password with the pre-set values in the [redis_test.go](https://github.com/hashicorp/vault-plugin-database-redis/blob/main/redis_test.go) file.
+**Note:** The tests assume that the Redis database instance has a default user with the following ACL settings user default on `the-strong-one ~* +@all`. These pre-set values can be found in the [redis_test.go](https://github.com/hashicorp/vault-plugin-database-redis/blob/main/redis_test.go) file.
 
-Set `VAULT_ACC` to execute all of the tests. A subset of tests can be run using the command `go test -run TestDriver/Init` for example.
+Set `ACC_TEST_ENABLED` to execute all of the tests. A subset of tests can be run using the command `go test -run TestDriver/Init` for example.
 
 A Terraform project is included for convenience to initialize a new docker container and generate certificates if needed.
 If not already available, you can install Terraform by using [this documentation](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html).
-
-The setup script tries to find and use available Redis credentials from the environment. You can configure Redis credentials by using or editing the provider defined `./bootstrap/terraform/redis.tf` with your desired set of credentials.
+If not already available, you can install Docker by using [this link](https://docs.docker.com/get-docker/)
 
 To set up the test container:
 
@@ -78,7 +76,7 @@ $ make setup-env
 ...
 Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
 
-$ source ./bootstrap/terraform/local_environment_setup.sh
+$ make source-env
 
 $ make configure
 ```
@@ -243,7 +241,7 @@ $ export TEST_REDIS_USERNAME=default &&\
 $ export TEST_REDIS_PASSWORD=the-strong-one &&\
 $ export TEST_REDIS_CACERT_RELATIVE_PATH=/scripts/tests/tls/ca.crt
 
-$ make test
+$ make testacc
 ```
 
 ## Spring Cloud Vault Integration

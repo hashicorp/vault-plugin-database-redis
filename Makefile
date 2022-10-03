@@ -16,7 +16,7 @@ test:
 
 .PHONY: testacc
 testacc:
-	ACC_TEST_ENABLED=1 CA_CERT_FILE=$(TEST_REDIS_CACERT_PATH) REDIS_HOST=$(TEST_REDIS_HOST) REDIS_TLS=true CGO_ENABLED=0 go test -v ./... $(TESTARGS) -timeout=20m
+	ACC_TEST_ENABLED=1 CGO_ENABLED=0 go test -v ./... $(TESTARGS) -timeout=20m
 
 .PHONY: fmtcheck
 fmtcheck:
@@ -30,6 +30,9 @@ fmt:
 setup-env:
 	cd bootstrap/terraform && terraform init && terraform apply -auto-approve
 
+.PHONY: source-env
+source-env:
+	./bootstrap/terraform/local_environment_setup.sh
 
 .PHONY: teardown-env
 teardown-env:
