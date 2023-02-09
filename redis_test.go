@@ -175,11 +175,9 @@ func testRedisDBInitialize_NoTLS(t *testing.T, host string, port int) {
 		"password": adminPassword,
 	}
 	err := setupRedisDBInitialize(t, connectionDetails)
-
 	if err != nil {
 		t.Fatalf("Testing Init() failed: error: %s", err)
 	}
-
 }
 
 func testRedisDBInitialize_TLS(t *testing.T, host string, port int) {
@@ -209,7 +207,6 @@ func testRedisDBInitialize_TLS(t *testing.T, host string, port int) {
 	if err != nil {
 		t.Fatalf("Testing TLS Init() failed: error: %s", err)
 	}
-
 }
 
 func testRedisDBCreateUser(t *testing.T, address string, port int) {
@@ -650,6 +647,7 @@ func testRedisDBCreateUser_groupOnly(t *testing.T, address string, port int) {
 		t.Fatalf("Could not revoke user: %s", userResp.Username)
 	}
 }
+
 func testRedisDBCreateUser_roleAndGroup(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
@@ -725,6 +723,7 @@ func testRedisDBCreateUser_roleAndGroup(t *testing.T, address string, port int) 
 		t.Fatalf("Could not revoke user: %s", userResp.Username)
 	}
 }
+
 func testRedisDBRotateRootCredentials(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
