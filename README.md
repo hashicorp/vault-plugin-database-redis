@@ -8,7 +8,7 @@ The plugin supports the generation of static and dynamic user roles and root cre
 
 ## Build
 
-To build this package for any platform you will need to clone this repository and cd into the repo directory and `go build -o vault-plugin-database-redis ./cmd/vault-plugin-database-redis/`.
+To build this package for any platform, you will need to clone this repository, cd into the repo directory, then run `go build -o vault-plugin-database-redis ./cmd/vault-plugin-database-redis/`.
 
 **Please note:** In case of the following errors, while creating Redis connection in Vault, please build this plugin with `CGO_ENABLED=0 go build -ldflags='-extldflags=-static' -o vault-plugin-database-redis ./cmd/vault-plugin-database-redis/` command. More details on this error can be found [here](https://github.com/hashicorp/vault-plugin-database-redis/issues/1#issuecomment-1078415041).
 ````bash
