@@ -27,7 +27,7 @@ To run tests, `go test` will first set up the docker.io/redis:latest database im
 
 **Note:** The tests assume that the redis database instance has a default user with the following ACL settings `user default on nopass ~* +@all`. If it doesn't, you will need to align the Administrator username and password with the pre-set values in the `redis_test.go` file.
 
-Set `VAULT_ACC=1` to execute all of the tests, or a subset of tests can be run using the command `go test -run TestDriver/Init` for example.
+Set `VAULT_ACC=1` to execute all of the tests including the acceptance tests, or run just a subset of tests by using a command like `go test -run TestDriver/Init` for example.
 
 ## Installation
 
