@@ -11,7 +11,7 @@ services:
     networks:
       - redis
     restart: always
-    command: "redis-server --requirepass pa55w0rd --user us4rn4m3 on >pa55w0rd ~* allcommands"
+    command: "redis-server --requirepass default-pa55w0rd --user us4rn4m3 on >user-pa55w0rd ~* allcommands"
     ports:
       - "6379:6379"
     volumes:

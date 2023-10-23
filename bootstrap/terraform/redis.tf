@@ -30,6 +30,6 @@ resource "local_file" "setup_environment_file" {
 export TEST_REDIS_HOST=localhost &&\
 export TEST_REDIS_PORT=6379 &&\
 export TEST_REDIS_USERNAME=us4rn4m3 &&\
-export TEST_REDIS_PASSWORD=pa55w0rd
+export TEST_REDIS_PASSWORD=user-pa55w0rd
 EOF
 }
