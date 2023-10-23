@@ -23,9 +23,9 @@ Code: 400. Errors:
 ````
 
 ## Testing
-To run tests, `go test` will first set up the docker.io/redis:latest database image, then execute a set of basic tests against it. To test against different redis images, for example 5.0-buster, set the environment variable `REDIS_VERSION=5.0-buster`. If you want to run the tests against a local redis installation or an already running redis container, set the environment variable `REDIS_HOST` before executing. 
+To run tests, `go test` will first set up the docker.io/redis:latest database image, then execute a set of basic tests against it. To test against different redis images, for example 5.0-buster, set the environment variable `REDIS_VERSION=5.0-buster`. If you want to run the tests against a local redis installation or an already running redis container, set the environment variable `TEST_REDIS_HOST` before executing. 
 
-**Note:** The tests assume that the redis database instance has a default user with the following ACL settings `user default on nopass ~* +@all`. If it doesn't, you will need to align the Administrator username and password with the pre-set values in the `redis_test.go` file.
+**Note:** The tests assume that the redis database instance has a default user with the following ACL settings `user default on >pa55w0rd ~* +@all`. If it doesn't, you will need to align the Administrator username and password with the pre-set values in the `redis_test.go` file.
 
 Set `VAULT_ACC=1` to execute all of the tests including the acceptance tests, or run just a subset of tests by using a command like `go test -run TestDriver/Init` for example.
 
