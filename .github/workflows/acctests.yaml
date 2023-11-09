@@ -4,5 +4,5 @@ on: push
 
 jobs:
   run-acceptance-tests:
-    uses: hashicorp/vault-workflows-common/.github/workflows/acc-tests.yaml@21194515bc9f86198b97d6d0be0d741728f48b4d
+    uses: hashicorp/vault-workflows-common/.github/workflows/acc-tests.yaml@a763db5ff25af0241a5ef59b926ea1f34784229e
     secrets: inherit
