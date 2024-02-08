@@ -1,5 +1,17 @@
 ## Unreleased
 
+## v0.2.3
+IMPROVEMENTS:
+* Updated dependencies:
+   * `github.com/hashicorp/go-hclog` v1.5.0 -> v1.6.2
+   * `github.com/hashicorp/vault/sdk` v0.10.0 -> v0.10.2
+   * `github.com/docker/docker` 23.0.4+incompatible -> 24.0.7+incompatible
+   * `github.com/opencontainers/runc` 1.1.6 -> 1.1.12
+   * `golang.org/x/crypto` 0.6.0 -> 0.17.0
+   * `golang.org/x/net` 0.8.0 -> 0.17.0
+   * `google.golang.org/grpc` 1.57.0 -> 1.57.1
+
+
 ## v0.2.2
 IMPROVEMENTS:
 * Updated dependencies:
