@@ -2,6 +2,7 @@
 IMPROVEMENTS:
 * Updated dependencies:
    * `github.com/hashicorp/vault/sdk` v0.10.2 -> v0.11.0
+   * `github.com/jackc/pgx/v4` v4.18.1 -> v4.18.2
 
 ## v0.2.3
 IMPROVEMENTS:
