@@ -1,9 +1,20 @@
 # vault-plugin-database-redis
 
+<<<<<<< HEAD
+A [Vault](https://www.vaultproject.io) plugin for Redis
+=======
+[![CircleCI](https://circleci.com/gh/hashicorp/vault-plugin-database-redis.svg?style=svg)](https://circleci.com/gh/hashicorp/vault-plugin-database-redis)
+
 A [Vault](https://www.vaultproject.io) plugin for Redis
 
 This project uses the database plugin interface introduced in Vault version 0.7.1.
 
+The plugin supports the generation of static and dynamic user roles and root credential rotation in a standalone REDIS server or a REDIS cluster for REDIS 6.0 and above. REDIS Sentinel is not supported at this time.
+>>>>>>> cluster-support
+
+This project uses the database plugin interface introduced in Vault version 0.7.1.
+
+<<<<<<< HEAD
 The plugin supports the generation of static and dynamic user roles and root credential rotation on a stand alone redis server.
 
 ## Build
@@ -11,12 +22,27 @@ The plugin supports the generation of static and dynamic user roles and root cre
 Use `make dev` to build a development version of this plugin.
 
 **Please note:** In case of the following errors, while creating Redis connection in Vault, please build this plugin with `CGO_ENABLED=0 go build -ldflags='-extldflags=-static' -o vault-plugin-database-redis ./cmd/vault-plugin-database-redis/` command. More details on this error can be found [here](https://github.com/hashicorp/vault-plugin-database-redis/issues/1#issuecomment-1078415041).
+=======
+## Build
+
+To build this package for any platform you will need to clone this repository and cd into the repo directory and `go build -o redis-database-plugin ./cmd/redis-database-plugin/`. To test `go test` will execute a set of basic tests against against the docker.io/redis:latest redis database image. To test against different redis images, for example 6.0-buster, set the `REDIS_VERSION=5.0-buster` environment variable. If you want to run the tests against a local redis installation or an already running redis container, set the environment variable `REDIS_HOST` before executing. If the environment variable `REDIS_PORT` is not set the port to use defaults to 6379. To run the tests against a REDIS cluster the environment variable `REDIS_CLUSTER` needs to be set. It should contain a comma separated list of the cluster addresses including the port to use, `REDIS_CLUSTER=host1:7001,host2:7001,host3.7001`. **Note** the tests assume that the redis database instance has a default user with the following ACL settings `user default on nopass ~* +@all`. If not you will need to modify the defaultUsername and defaultPassword values in the `redis_test.go` file with an account that can execute the  ACL commands. Set VAULT_ACC to execute all of the tests. A subset of tests can be run using the command `go test -run TestDriver/Init` for example.
+
+## Installation
+
+The Vault plugin system is documented on the [Vault documentation site](https://www.vaultproject.io/docs/internals/plugins.html).
+
+You will need to define a plugin directory using the `plugin_directory` configuration directive, then place the
+`vault-plugin-database-redis` executable generated above, into the directory.
+
+**Please note:** This plugin is incompatible with Vault versions before 1.6.0 due to an update of the database plugin interface. You will be able to register the plugin in the plugins catalog with an older version of Vault but when you try to initialize the plugin to connect to a database instance you will get this error.
+>>>>>>> cluster-support
 ````bash
 Error writing data to database/config/my-redis: Error making API request.
 
 URL: PUT http://127.0.0.1:8200/v1/database/config/my-redis
 Code: 400. Errors:
 
+<<<<<<< HEAD
 * error creating database object: invalid database version: 2 errors occurred:
         * fork/exec /config/plugin/vault-plugin-database-redis: no such file or directory
         * fork/exec /config/plugin/vault-plugin-database-redis: no such file or directory
@@ -43,30 +69,49 @@ Error writing data to database/config/my-redis: Error making API request.
 URL: PUT http://127.0.0.1:8200/v1/database/config/my-redis
 Code: 400. Errors:
 
+=======
+>>>>>>> cluster-support
 * error creating database object: Incompatible API version with plugin. Plugin version: 5, Client versions: [3 4]
 ````
 
 Sample commands for registering and starting to use the plugin:
 
 ```bash
+<<<<<<< HEAD
 $ SHA256=$(shasum -a 256 plugins/vault-plugin-database-redis | cut -d' ' -f1)
 
 $ vault secrets enable database
 
 $ vault write sys/plugins/catalog/database/vault-plugin-database-redis sha256=$SHA256 \
         command=vault-plugin-database-redis
+=======
+$ SHA256=$(shasum -a 256 plugins/redis-database-plugin | cut -d' ' -f1)
+
+$ vault secrets enable database
+
+$ vault write sys/plugins/catalog/database/redis-database-plugin sha256=$SHA256 \
+        command=redis-database-plugin
+>>>>>>> cluster-support
 ```
 
 At this stage you are now ready to initialize the plugin to connect to the redis db using unencrypted or encrypted communications.
 
 Prior to initializing the plugin, ensure that you have created an administration account. Vault will use the user specified here to create/update/revoke database credentials. That user must have the appropriate rule `+@admin` to perform actions upon other database users.
 
+<<<<<<< HEAD
 ### Plugin Initialization
 
 #### Standalone REDIS Server.
 
 ```bash
 $ vault write database/config/my-redis plugin_name="vault-plugin-database-redis" \
+=======
+### Plugin initialization
+
+#### Stand alone REDIS server using plain text communications.
+```bash
+$ vault write database/config/my-redis plugin_name="redis-database-plugin" \
+>>>>>>> cluster-support
         host="localhost" port=6379 username="Administrator" password="password" \
         allowed_roles="my-redis-*-role"
 
@@ -76,6 +121,23 @@ $ vault write -force database/rotate-root/my-redis
 
  ```
 
+<<<<<<< HEAD
+=======
+#### Cluster of REDIS servers using TLS
+
+```bash
+$ CACRT=$(cat ca.crt| base64 -w 0)
+$ vault write database/config/my-redis-cluster plugin_name="redis-database-plugin" \
+  cluster="host1:7000,host2:7000,host3:7000" username=Administrator password=password \
+  allowed_roles=* persistence_mode="ACLFILE" \
+  CACRT=$(cat ca.crt| base64 -w 0)
+# You should consider rotating the admin password. Note that if you do, the new password will never be made available
+# through Vault, so you should create a vault-specific database admin user for this.
+$ vault write -force database/rotate-root/my-redis-cluster  
+  
+```
+
+>>>>>>> cluster-support
 ### Dynamic Role Creation
 
 When you create roles, you need to provide a JSON string containing the Redis ACL rules which are documented [here](https://redis.io/commands/acl-cat) or in the output of the `ACL CAT` redis command.
@@ -147,6 +209,7 @@ ttl                    3m59s
 username               vault-edu
 ```
 
+<<<<<<< HEAD
 ## Spring Cloud Vault Integration
 
 > Tested on [spring-cloud-vault:3.1.0](https://docs.spring.io/spring-cloud-vault/docs/3.1.0/reference/html)
@@ -190,3 +253,8 @@ on how to get started with Vault.
 
 When iterating, you can reload any local code changes with `make configure` as many times as desired to test the latest 
 modifications via the Vault CLI or API.
+=======
+## Developing
+
+You can run `make dev` in the root of the repo to start up a development vault server and automatically register a local build of the plugin. You will need to have a built `vault` binary available in your `$PATH` to do so.
+>>>>>>> cluster-support

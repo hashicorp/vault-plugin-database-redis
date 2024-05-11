@@ -8,28 +8,30 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"net"
-	"strconv"
-	"sync"
-
 	"github.com/hashicorp/vault/sdk/database/helper/connutil"
 	"github.com/mediocregopher/radix/v4"
 	"github.com/mitchellh/mapstructure"
+	"net"
+	"strconv"
+	"strings"
+	"sync"
 )
 
 type redisDBConnectionProducer struct {
 	Host        string `json:"host"`
 	Port        int    `json:"port"`
+	Cluster     string `json:"cluster"`
 	Username    string `json:"username"`
 	Password    string `json:"password"`
 	TLS         bool   `json:"tls"`
 	InsecureTLS bool   `json:"insecure_tls"`
 	CACert      string `json:"ca_cert"`
+	Persistence string `json:"persistence_mode"`
 
 	Initialized bool
 	rawConfig   map[string]interface{}
 	Type        string
-	client      radix.Client
+	client      radix.MultiClient //radix.Client
 	Addr        string
 	sync.Mutex
 }
@@ -64,9 +66,9 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 	}
 
 	switch {
-	case len(c.Host) == 0:
-		return nil, fmt.Errorf("host cannot be empty")
-	case c.Port == 0:
+	case len(c.Host) == 0 && len(c.Cluster) == 0:
+		return nil, fmt.Errorf("cluster and host cannot be empty")
+	case len(c.Cluster) == 0 && c.Port == 0:
 		return nil, fmt.Errorf("port cannot be empty")
 	case len(c.Username) == 0:
 		return nil, fmt.Errorf("username cannot be empty")
@@ -82,12 +84,20 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 		}
 	}
 
+	// ??c.Connected = false
+
+	if len(c.Persistence) != 0 {
+		c.Persistence = strings.ToUpper(c.Persistence)
+		if c.Persistence != "REWRITE" && "ACLFILE" != c.Persistence {
+			return nil, fmt.Errorf("persistence_mode can only be 'REWRITE' or 'ACLFILE', not %s", c.Persistence)
+		}
+	}
+
 	c.Initialized = true
 
 	if verifyConnection {
 		if _, err := c.Connection(ctx); err != nil {
-			c.close()
-			return nil, fmt.Errorf("error verifying connection: %w", err)
+			return nil, fmt.Errorf("error verifying connection with user %s: %w", c.Username, err)
 		}
 	}
 
@@ -112,6 +122,7 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (interface{}
 	}
 	var err error
 	var poolConfig radix.PoolConfig
+	var clusterConfig radix.ClusterConfig
 
 	if c.TLS {
 		rootCAs := x509.NewCertPool()
@@ -140,17 +151,50 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (interface{}
 		}
 	}
 
-	client, err := poolConfig.New(ctx, "tcp", c.Addr)
-	if err != nil {
-		return nil, err
+	if len(c.Cluster) != 0 {
+		hosts := strings.Split(c.Cluster, ",")
+		clusterConfig = radix.ClusterConfig{
+			PoolConfig: poolConfig,
+		}
+		c.client, err = clusterConfig.New(ctx, hosts)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		var client radix.Client
+		client, err = poolConfig.New(ctx, "tcp", c.Addr)
+		if err != nil {
+			return nil, err
+		}
+		rs := radix.ReplicaSet{
+			Primary:     client,
+			Secondaries: nil,
+		}
+		c.client = radix.NewMultiClient(rs)
 	}
-	c.client = client
 
 	return c.client, nil
 }
 
 // close terminates the database connection without locking
 func (c *redisDBConnectionProducer) close() error {
+	/*if c.client != nil {
+                fmt.Printf("Client is a %T\n", c.client)
+                fmt.Printf("Client is a %#v\n", c.client)
+
+	switch c.client.(type) {
+		case *radix.Cluster:
+			if err := c.client.(*radix.Cluster).Close(); err != nil {
+		//if err := c.client.Close(); err != nil {
+			return err
+		}
+
+	}
+	}
+                fmt.Printf("Close status is Ok\n")
+
+	c.client = nil
+	return nil */
 	if c.client != nil {
 		if err := c.client.Close(); err != nil {
 			return err
@@ -159,6 +203,7 @@ func (c *redisDBConnectionProducer) close() error {
 
 	c.client = nil
 	return nil
+
 }
 
 // Close terminates the database connection with locking
