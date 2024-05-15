@@ -165,7 +165,7 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (interface{}
 	} else {
 		var client radix.Client
 		var secondaries []radix.Client
-		
+
 		client, err = poolConfig.New(ctx, "tcp", c.Addr)
 		if err != nil {
 			return nil, err
