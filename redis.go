@@ -148,7 +148,6 @@ func (c *RedisDB) DeleteUser(ctx context.Context, req dbplugin.DeleteUserRequest
 				return dbplugin.DeleteUserResponse{}, errwrap.Wrapf(fmt.Sprintf("response from %s node %s for DeleteUser: %s, error: {{err}}", connType, node, response), err)
 			}
 			err = persistChange(ctx, v, c.Persistence)
-
 			if err != nil {
 				return dbplugin.DeleteUserResponse{}, errwrap.Wrapf(fmt.Sprintf("error persisting DeleteUser on node %s: {{err}}", node), err)
 			}
@@ -159,10 +158,15 @@ func (c *RedisDB) DeleteUser(ctx context.Context, req dbplugin.DeleteUserRequest
 }
 
 func newUser(ctx context.Context, db radix.MultiClient, username, mode string, req dbplugin.NewUserRequest) error {
+	fmt.Printf("statements = %#v\n", req.Statements.Commands)
 	statements := removeEmpty(req.Statements.Commands)
+	fmt.Printf("statements = %#v\n", statements)
+
 	if len(statements) == 0 {
 		statements = append(statements, defaultRedisUserRule)
 	}
+	fmt.Printf("statements = %#v\n", statements)
+
 	// setup REDIS command
 	aclargs := []string{"SETUSER", username, "ON", ">" + req.Password}
 
@@ -171,7 +175,7 @@ func newUser(ctx context.Context, db radix.MultiClient, username, mode string, r
 	if err != nil {
 		return errwrap.Wrapf("error unmarshalling REDIS rules in the creation statement JSON: {{err}}", err)
 	}
-
+	fmt.Printf("args = %#v\n", args)
 	// append the additional rules/permissions
 	aclargs = append(aclargs, args...)
 
@@ -202,12 +206,10 @@ func newUser(ctx context.Context, db radix.MultiClient, username, mode string, r
 		for _, v := range getClientsFromRS(rs) {
 
 			err = v.Do(ctx, radix.Cmd(&response, "ACL", aclargs...))
-
 			if err != nil {
 				return errwrap.Wrapf(fmt.Sprintf("Response in %s newUser: %s for node %s, error: {{err}}", connType, node, response), err)
 			}
 			err = persistChange(ctx, v, mode)
-
 			if err != nil {
 				return errwrap.Wrapf(fmt.Sprintf("persist error for node %s: {{err}}", node), err)
 			}
@@ -302,12 +304,10 @@ func (c *RedisDB) changeUserPassword(ctx context.Context, username, password str
 		fmt.Printf("<><><> processing node %s, rs's = %#v\n", node, rs)
 		for _, v := range getClientsFromRS(rs) {
 			err = v.Do(ctx, radix.Cmd(&sresponse, "ACL", "SETUSER", username, "RESETPASS", ">"+password))
-
 			if err != nil {
 				return errwrap.Wrapf(fmt.Sprintf("cluster reset of password for user %s on node %s failed, REDIS response %s, error, {{err}}", username, node, sresponse), err)
 			}
 			err = persistChange(ctx, v, c.Persistence)
-
 			if err != nil {
 				return errwrap.Wrapf(fmt.Sprintf("error persisting password change on node %s: {{err}}", node), err)
 			}
@@ -375,7 +375,7 @@ func persistChange(ctx context.Context, client radix.Client, pmode string) error
 }
 
 func getClientsFromRS(rs radix.ReplicaSet) []radix.Client {
-	var c = []radix.Client{}
+	c := []radix.Client{}
 	if rs.Primary != nil {
 		c = append(c, rs.Primary)
 	}

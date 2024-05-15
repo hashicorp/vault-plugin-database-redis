@@ -8,18 +8,20 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"github.com/hashicorp/vault/sdk/database/helper/connutil"
-	"github.com/mediocregopher/radix/v4"
-	"github.com/mitchellh/mapstructure"
 	"net"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/hashicorp/vault/sdk/database/helper/connutil"
+	"github.com/mediocregopher/radix/v4"
+	"github.com/mitchellh/mapstructure"
 )
 
 type redisDBConnectionProducer struct {
 	Host        string `json:"host"`
 	Port        int    `json:"port"`
+	Secondaries string `json:"secondaries"`
 	Cluster     string `json:"cluster"`
 	Username    string `json:"username"`
 	Password    string `json:"password"`
@@ -31,7 +33,7 @@ type redisDBConnectionProducer struct {
 	Initialized bool
 	rawConfig   map[string]interface{}
 	Type        string
-	client      radix.MultiClient //radix.Client
+	client      radix.MultiClient // radix.Client
 	Addr        string
 	sync.Mutex
 }
@@ -162,13 +164,25 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (interface{}
 		}
 	} else {
 		var client radix.Client
+		var secondaries []radix.Client
+		
 		client, err = poolConfig.New(ctx, "tcp", c.Addr)
 		if err != nil {
 			return nil, err
 		}
+		if len(c.Secondaries) != 0 {
+			hosts := strings.Split(c.Secondaries, ",")
+			for _, addr := range hosts {
+				client, err := poolConfig.New(ctx, "tcp", addr)
+				if err != nil {
+					return nil, err
+				}
+				secondaries = append(secondaries, client)
+			}
+		}
 		rs := radix.ReplicaSet{
 			Primary:     client,
-			Secondaries: nil,
+			Secondaries: secondaries,
 		}
 		c.client = radix.NewMultiClient(rs)
 	}
@@ -178,23 +192,6 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (interface{}
 
 // close terminates the database connection without locking
 func (c *redisDBConnectionProducer) close() error {
-	/*if c.client != nil {
-                fmt.Printf("Client is a %T\n", c.client)
-                fmt.Printf("Client is a %#v\n", c.client)
-
-	switch c.client.(type) {
-		case *radix.Cluster:
-			if err := c.client.(*radix.Cluster).Close(); err != nil {
-		//if err := c.client.Close(); err != nil {
-			return err
-		}
-
-	}
-	}
-                fmt.Printf("Close status is Ok\n")
-
-	c.client = nil
-	return nil */
 	if c.client != nil {
 		if err := c.client.Close(); err != nil {
 			return err
@@ -203,7 +200,6 @@ func (c *redisDBConnectionProducer) close() error {
 
 	c.client = nil
 	return nil
-
 }
 
 // Close terminates the database connection with locking

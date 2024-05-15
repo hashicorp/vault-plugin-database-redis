@@ -8,12 +8,12 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"net"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
-	"strconv"
-	"net"
 
 	"github.com/hashicorp/vault/sdk/database/dbplugin/v5"
 	"github.com/mediocregopher/radix/v4"
@@ -22,29 +22,38 @@ import (
 )
 
 const (
-	defaultUsername       = "default"
-	defaultPassword       = "default-pa55w0rd"
-	adminUsername         = "Administrator"
-	adminPassword         = "password"
-	aclCat                = "+@admin"
-	testRedisRole         = `["%s"]`
-	testRedisGroup        = `["+@all"]`
-	testRedisRoleAndGroup = `["%s"]`
+	defaultUsername = "default"
+	defaultPassword = "default-pa55w0rd"
+	adminUsername   = "Administrator"
+	adminPassword   = "password"
+	aclCat          = "+@admin"
+	testRedisRole   = `["%s"]`
+	testRedisGroup  = `["+@all"]`
+	testRedisRole3  = `["%s", "%s", "%s"]`
 )
 
-var redisTls = false
-var redis_container = false
+var (
+	redisTls        = false
+	redis_container = false
+	redis_secondaries = ""
+)
 
 func prepareRedisTestContainer(t *testing.T) (func(), string, int) {
 	if os.Getenv("TEST_REDIS_TLS") != "" {
 		redisTls = true
 	}
 	if os.Getenv("TEST_REDIS_HOST") != "" {
-		return func() {}, os.Getenv("TEST_REDIS_HOST"), 6379
+		redis_secondaries = os.Getenv("TEST_REDIS_SECONDARIES")
+		port, err := strconv.Atoi(os.Getenv("TEST_REDIS_PORT"))
+		if err != nil {
+         		port = 6379
+		}
+		return func() {}, os.Getenv("TEST_REDIS_HOST"), port
 	}
-        if os.Getenv("TEST_REDIS_CLUSTER") != "" {
-                return func() {}, os.Getenv("TEST_REDIS_CLUSTER"), -1
-        }
+	if os.Getenv("TEST_REDIS_CLUSTER") != "" {
+		return func() {}, os.Getenv("TEST_REDIS_CLUSTER"), -1
+	}
+
 	// redver should match a redis repository tag. Default to latest.
 	redver := os.Getenv("REDIS_VERSION")
 	if redver == "" {
@@ -105,10 +114,10 @@ func prepareRedisTestContainer(t *testing.T) (func(), string, int) {
 
 func TestDriver(t *testing.T) {
 	var err error
-	var caCert []byte
+	// var caCert []byte
 	if os.Getenv("TEST_REDIS_TLS") != "" {
 		caCertFile := os.Getenv("CA_CERT_FILE")
-		caCert, err = os.ReadFile(caCertFile)
+		_, err = os.ReadFile(caCertFile)
 		if err != nil {
 			t.Fatal(fmt.Errorf("unable to read CA_CERT_FILE at %v: %w", caCertFile, err))
 		}
@@ -119,22 +128,44 @@ func TestDriver(t *testing.T) {
 	defer cleanup()
 
 	/*err, _ = checkPersistenceMode(host, port, redisTls, caCert, "default", "")
-	if err != nil {
-		t.Fatalf("Failed to check persistence mode: %s", err)
-	}*/
+	  if err != nil {
+	  	t.Fatalf("Failed to check persistence mode: %s", err)
+	  }*/
 
-	err = createUser(host, port, redisTls, caCert, defaultUsername, defaultPassword, "Administrator", "password",
-		aclCat)
+	/*
+	   err = createUser(host, port, redisTls, caCert, defaultUsername, defaultPassword, "Administrator", "password",
+
+	   	aclCat)
+
+	   	if err != nil {
+	   		t.Fatalf("Failed to create Administrator user using 'default' user: %s", err)
+	   	}
+
+	   err = createUser(host, port, redisTls, caCert, adminUsername, adminPassword, "rotate-root", "rotate-rootpassword",
+
+	   	aclCat)
+
+	   	if err != nil {
+	   		t.Fatalf("Failed to create rotate-root test user: %s", err)
+	   	}
+
+	   err = createUser(host, port, redisTls, caCert, adminUsername, adminPassword, "vault-edu", "password",
+
+	   	aclCat)
+
+	   	if err != nil {
+	   		t.Fatalf("Failed to create vault-edu test user: %s", err)
+	   	}
+	*/
+	err = createUser(host, port, defaultUsername, defaultPassword, "Administrator", "password", aclCat)
 	if err != nil {
 		t.Fatalf("Failed to create Administrator user using 'default' user: %s", err)
 	}
-	err = createUser(host, port, redisTls, caCert, adminUsername, adminPassword, "rotate-root", "rotate-rootpassword",
-		aclCat)
+	err = createUser(host, port, adminUsername, adminPassword, "rotate-root", "rotate-rootpassword", aclCat)
 	if err != nil {
 		t.Fatalf("Failed to create rotate-root test user: %s", err)
 	}
-	err = createUser(host, port, redisTls, caCert, adminUsername, adminPassword, "vault-edu", "password",
-		aclCat)
+	err = createUser(host, port, adminUsername, adminPassword, "vault-edu", "password", aclCat)
 	if err != nil {
 		t.Fatalf("Failed to create vault-edu test user: %s", err)
 	}
@@ -145,8 +176,10 @@ func TestDriver(t *testing.T) {
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser(t, host, port) })
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_DefaultRule(t, host, port) })
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_plusRole(t, host, port) })
+	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_groupOnly(t, host, port) })
+	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_roleAndGroup(t, host, port) })
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_persistAclFile(t, host, port) })
-	//	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreate_persistConfig(t, host, port) })
+	// t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreate_persistConfig(t, host, port) })
 	t.Run("Rotate", func(t *testing.T) { testRedisDBRotateRootCredentials(t, host, port) })
 	t.Run("Creds", func(t *testing.T) { testRedisDBSetCredentials(t, host, port) })
 	t.Run("Secret", func(t *testing.T) { testConnectionProducerSecretValues(t) })
@@ -177,7 +210,6 @@ func setupRedisDBInitialize(t *testing.T, connectionDetails map[string]interface
 }
 
 func testRedisDBInitialize_NoTLS(t *testing.T, host string, port int) {
-
 	if redisTls {
 		t.Skip("skipping plain text Init() test in TLS mode")
 	}
@@ -234,12 +266,11 @@ func testRedisDBInitialize_TLS(t *testing.T, host string, port int) {
 		"cacrt":    CACert,
 	}
 	err = setupRedisDBInitialize(t, connectionDetails)
-
 	if err != nil {
 		t.Fatalf("Testing TLS Init() failed: error: %s", err)
 	}
-
 }
+
 func testRedisDBInitialize_persistence(t *testing.T, host string, port int) {
 	if redisTls {
 		t.Skip("skipping plain text Init() with persistence_mode test in TLS mode")
@@ -279,7 +310,6 @@ func testRedisDBInitialize_persistence(t *testing.T, host string, port int) {
 	}
 
 	err = setupRedisDBInitialize(t, connectionDetails)
-
 	if err != nil {
 		t.Fatalf("Testing Init() with perstence_mode rewrite failed: %s.", err)
 	}
@@ -294,12 +324,11 @@ func testRedisDBInitialize_persistence(t *testing.T, host string, port int) {
 	}
 
 	err = setupRedisDBInitialize(t, connectionDetails)
-
 	if err != nil {
 		t.Fatalf("Testing Init() with perstence_mode aclfile failed: %s", err)
 	}
-
 }
+
 func testRedisDBCreateUser(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
@@ -309,12 +338,12 @@ func testRedisDBCreateUser(t *testing.T, address string, port int) {
 
 	var cluster_hosts string
 	host := address
-	//rule := ""
+	var rule []string
 
 	if port == -1 {
 		cluster_hosts = address
 		host = ""
-		//rule = `["+cluster"]`
+		rule = []string{`["+readonly", "+cluster"]`}
 	}
 
 	connectionDetails := map[string]interface{}{
@@ -360,7 +389,7 @@ func testRedisDBCreateUser(t *testing.T, address string, port int) {
 			RoleName:    "test",
 		},
 		Statements: dbplugin.Statements{
-			Commands: []string{`["~foo", "+@read", "+@all"]`},
+			Commands: rule,
 		},
 		Password:   password,
 		Expiration: time.Now().Add(time.Minute),
@@ -488,6 +517,10 @@ func checkRuleAllowed(t *testing.T, username, password, address string, port int
 	}
 	var response string
 	err = db.client.Do(context.Background(), radix.Cmd(&response, cmd, rules...))
+	if err != nil {
+		return fmt.Errorf("Response in checkRules for %s %w", response, err)
+	}
+
 	return err
 }
 
@@ -609,10 +642,10 @@ func testRedisDBCreateUser_DefaultRule(t *testing.T, address string, port int) {
 			RoleName:    username,
 		},
 		Statements: dbplugin.Statements{
-			Commands: []string{`["~foo", "+@read", "+@all"]`},
+			Commands: []string{`["~foo", "+@read", "+readonly", "+cluster"]`},
 		},
 		Password:   password,
-		Expiration: time.Now().Add(time.Minute),
+		Expiration: time.Now().Add(time.Minute * 5),
 	}
 
 	userResp, err := db.NewUser(context.Background(), createReq)
@@ -630,12 +663,12 @@ func testRedisDBCreateUser_DefaultRule(t *testing.T, address string, port int) {
 
 	rules = []string{"foo", "bar"}
 	if err = checkRuleAllowed(t, userResp.Username, password, address, port, "set", rules); err == nil {
-		t.Fatalf("set did not fail with +@read rule: %s", err)
+		t.Fatalf("set did not fail user %s with +@read rule: %s", userResp.Username, err)
 	}
 
 	err = revokeUser(t, userResp.Username, address, port)
 	if err != nil {
-		t.Fatalf("Could not revoke user: %s", username)
+		t.Fatalf("Could not revoke user: %s", userResp.Username)
 	}
 
 	db.Close()
@@ -722,7 +755,165 @@ func testRedisDBCreateUser_plusRole(t *testing.T, address string, port int) {
 	}
 }
 
-// g1 & g2 must exist in the database.
+func testRedisDBCreateUser_groupOnly(t *testing.T, address string, port int) {
+	if os.Getenv("VAULT_ACC") == "" {
+		t.SkipNow()
+	}
+
+	var cluster_hosts string
+	host := address
+
+	if port == -1 {
+		cluster_hosts = address
+		host = ""
+	}
+
+	connectionDetails := map[string]interface{}{
+		"cluster":          cluster_hosts,
+		"host":             host,
+		"port":             port,
+		"username":         adminUsername,
+		"password":         adminPassword,
+		"protocol_version": 4,
+	}
+
+	if redisTls {
+		CACertFile := os.Getenv("CA_CERT_FILE")
+		CACert, err := os.ReadFile(CACertFile)
+		if err != nil {
+			t.Fatal(fmt.Errorf("unable to read CA_CERT_FILE at %v: %w", CACertFile, err))
+		}
+
+		connectionDetails["tls"] = true
+		connectionDetails["ca_cert"] = CACert
+		connectionDetails["insecure_tls"] = true
+	}
+
+	initReq := dbplugin.InitializeRequest{
+		Config:           connectionDetails,
+		VerifyConnection: true,
+	}
+
+	db := new()
+	_, err := db.Initialize(context.Background(), initReq)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	if !db.Initialized {
+		t.Fatal("Database should be initialized")
+	}
+
+	password := "y8fva_sdVA3rasf"
+
+	createReq := dbplugin.NewUserRequest{
+		UsernameConfig: dbplugin.UsernameMetadata{
+			DisplayName: "test",
+			RoleName:    "test",
+		},
+		Statements: dbplugin.Statements{
+			Commands: []string{fmt.Sprintf(testRedisGroup)},
+		},
+		Password:   password,
+		Expiration: time.Now().Add(time.Minute),
+	}
+
+	userResp, err := db.NewUser(context.Background(), createReq)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	db.Close()
+
+	if err := checkCredsExist(t, userResp.Username, password, address, port); err != nil {
+		t.Fatalf("Could not connect with new credentials: %s", err)
+	}
+
+	err = revokeUser(t, userResp.Username, address, port)
+	if err != nil {
+		t.Fatalf("Could not revoke user: %s", userResp.Username)
+	}
+}
+
+func testRedisDBCreateUser_roleAndGroup(t *testing.T, address string, port int) {
+	if os.Getenv("VAULT_ACC") == "" {
+		t.SkipNow()
+	}
+
+	var cluster_hosts string
+	host := address
+
+	if port == -1 {
+		cluster_hosts = address
+		host = ""
+	}
+	connectionDetails := map[string]interface{}{
+		"cluster":          cluster_hosts,
+		"host":             host,
+		"port":             port,
+		"username":         adminUsername,
+		"password":         adminPassword,
+		"protocol_version": 4,
+	}
+
+	if redisTls {
+		CACertFile := os.Getenv("CA_CERT_FILE")
+		CACert, err := os.ReadFile(CACertFile)
+		if err != nil {
+			t.Fatal(fmt.Errorf("unable to read CA_CERT_FILE at %v: %w", CACertFile, err))
+		}
+
+		connectionDetails["tls"] = true
+		connectionDetails["ca_cert"] = CACert
+		connectionDetails["insecure_tls"] = true
+	}
+
+	initReq := dbplugin.InitializeRequest{
+		Config:           connectionDetails,
+		VerifyConnection: true,
+	}
+
+	db := new()
+	_, err := db.Initialize(context.Background(), initReq)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	if !db.Initialized {
+		t.Fatal("Database should be initialized")
+	}
+
+	password := "y8fva_sdVA3rasf"
+
+	createReq := dbplugin.NewUserRequest{
+		UsernameConfig: dbplugin.UsernameMetadata{
+			DisplayName: "test",
+			RoleName:    "test",
+		},
+		Statements: dbplugin.Statements{
+			Commands: []string{fmt.Sprintf(testRedisRole3, aclCat, "+readonly", "+cluster")},
+		},
+		Password:   password,
+		Expiration: time.Now().Add(time.Minute),
+	}
+
+	userResp, err := db.NewUser(context.Background(), createReq)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	db.Close()
+
+	if err := checkCredsExist(t, userResp.Username, password, address, port); err != nil {
+		t.Fatalf("Could not connect with new credentials: %s", err)
+	}
+
+	err = revokeUser(t, userResp.Username, address, port)
+	if err != nil {
+		t.Fatalf("Could not revoke user: %s", userResp.Username)
+	}
+}
+
 func testRedisDBCreateUser_persistAclFile(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
@@ -1099,18 +1290,18 @@ func testComputeTimeout(t *testing.T) {
 	}
 }
 
-func createUser(hostname string, port int, redisTls bool, CACert []byte, adminuser, adminpassword, username, password, aclRule string) (err error) {
+func OldcreateUser(hostname string, port int, redisTls bool, CACert []byte, adminuser, adminpassword, username, password, aclRule string) (err error) {
 	var poolConfig radix.PoolConfig
-        //var clusterConfig radix.ClusterConfig
-        var mclient radix.MultiClient
+	// var clusterConfig radix.ClusterConfig
+	var mclient radix.MultiClient
 
-       var cluster_hosts string
-        
-        if port == -1 {
-                cluster_hosts = hostname
-                hostname = ""
-        }
-        
+	var cluster_hosts string
+
+	if port == -1 {
+		cluster_hosts = hostname
+		hostname = ""
+	}
+
 	if redisTls {
 		rootCAs := x509.NewCertPool()
 		ok := rootCAs.AppendCertsFromPEM(CACert)
@@ -1138,29 +1329,29 @@ func createUser(hostname string, port int, redisTls bool, CACert []byte, adminus
 			},
 		}
 	}
-        ctx, _ := context.WithTimeout(context.Background(), 5000*time.Millisecond)
+	ctx, _ := context.WithTimeout(context.Background(), 5000*time.Millisecond)
 
-        if len(cluster_hosts) != 0 {
-                hosts := strings.Split(cluster_hosts, ",")
-                clusterConfig := radix.ClusterConfig{
-                        PoolConfig: poolConfig,
-                }
-                mclient, err = clusterConfig.New(ctx, hosts)
-                if err != nil {
-                        return err
-                }
-        } else {
+	if len(cluster_hosts) != 0 {
+		hosts := strings.Split(cluster_hosts, ",")
+		clusterConfig := radix.ClusterConfig{
+			PoolConfig: poolConfig,
+		}
+		mclient, err = clusterConfig.New(ctx, hosts)
+		if err != nil {
+			return err
+		}
+	} else {
 		addr := net.JoinHostPort(hostname, strconv.Itoa(port))
-                var client radix.Client
-                client, err = poolConfig.New(ctx, "tcp", addr)
-                if err != nil {
-                        return err
-                }
-                rs := radix.ReplicaSet{
-                        Primary:     client,
-                        Secondaries: nil,
-                }
-                mclient = radix.NewMultiClient(rs)
+		var client radix.Client
+		client, err = poolConfig.New(ctx, "tcp", addr)
+		if err != nil {
+			return err
+		}
+		rs := radix.ReplicaSet{
+			Primary:     client,
+			Secondaries: nil,
+		}
+		mclient = radix.NewMultiClient(rs)
 	}
 
 	// setup REDIS command
@@ -1181,7 +1372,6 @@ func createUser(hostname string, port int, redisTls bool, CACert []byte, adminus
 
 	var replicaSets map[string]radix.ReplicaSet
 	var connType string
-
 
 	fmt.Printf("createUser type is %T\n", mclient)
 
@@ -1206,7 +1396,6 @@ func createUser(hostname string, port int, redisTls bool, CACert []byte, adminus
 		for _, v := range getClientsFromRS(rs) {
 
 			err = v.Do(ctx, radix.Cmd(&response, "ACL", aclargs...))
-
 			if err != nil {
 				return fmt.Errorf("Response in %s newUser: %s for node %s, error: %w", connType, node, response, err)
 			}
@@ -1218,11 +1407,11 @@ func createUser(hostname string, port int, redisTls bool, CACert []byte, adminus
 		}
 	}
 
-
 	return nil
 }
 
-/*func checkPersistenceMode(hostname string, port int, redis_tls bool, CACert []byte, adminuser, adminpassword string) (err error, mode string) {
+/*
+func checkPersistenceMode(hostname string, port int, redis_tls bool, CACert []byte, adminuser, adminpassword string) (err error, mode string) {
 
 	var response []string
 	var client radix.Client
@@ -1269,4 +1458,101 @@ func createUser(hostname string, port int, redisTls bool, CACert []byte, adminus
 
 	return err, "some mode"
 
-}*/
+}
+*/
+func createUser(address string, port int, adminUsername, adminPassword, username, password, aclRule string) (err error) {
+	fmt.Printf("Creating test user %s\n", username)
+
+	var cluster_hosts string
+	host := address
+	var cluster_rules []string
+
+	if port == -1 {
+		cluster_hosts = address
+		host = ""
+		cluster_rules = []string{"+readonly", "+cluster"}
+	}
+	fmt.Printf("Rule = %#v\n", cluster_rules)
+	connectionDetails := map[string]interface{}{
+		"host":     host,
+		"port":     port,
+		"secondaries": redis_secondaries,
+		"cluster":  cluster_hosts,
+		"username": adminUsername,
+		"password": adminPassword,
+	}
+
+	if redisTls {
+		CACertFile := os.Getenv("CA_CERT_FILE")
+		CACert, err := os.ReadFile(CACertFile)
+		if err != nil {
+			return fmt.Errorf("unable to read CA_CERT_FILE at %v: %w", CACertFile, err)
+		}
+
+		connectionDetails["tls"] = true
+		connectionDetails["ca_cert"] = CACert
+		connectionDetails["insecure_tls"] = true
+	}
+
+	initReq := dbplugin.InitializeRequest{
+		Config:           connectionDetails,
+		VerifyConnection: true,
+	}
+
+	db := new()
+	_, err = db.Initialize(context.Background(), initReq)
+	if err != nil {
+		return fmt.Errorf("Failed to initialize database: %s", err)
+	}
+
+	if !db.Initialized {
+		return fmt.Errorf("Database should be initialized")
+	}
+
+	// setup REDIS command
+	aclargs := []string{"SETUSER", username, "ON", ">" + password, aclRule}
+	aclargs = append(aclargs, cluster_rules...)
+
+	var response string
+	var replicaSets map[string]radix.ReplicaSet
+	var connType string
+
+	fmt.Printf("createUser type is %T\n", db.client)
+
+	switch db.client.(type) {
+
+	case *radix.Sentinel:
+		replicaSets, err = db.client.(*radix.Sentinel).Clients()
+		connType = "Sentinel"
+
+	case radix.MultiClient:
+		replicaSets, err = db.client.Clients()
+		connType = "MultiClient"
+
+	case *radix.Cluster:
+		replicaSets, err = db.client.(*radix.Cluster).Clients()
+		connType = "Cluster"
+	}
+	if err != nil {
+		return fmt.Errorf("retrieving %s clients failed error: %w", connType, err)
+	}
+
+	ctx, _ := context.WithTimeout(context.Background(), 5000*time.Millisecond)
+
+	for node, rs := range replicaSets {
+		for _, v := range getClientsFromRS(rs) {
+
+			err = v.Do(ctx, radix.Cmd(&response, "ACL", aclargs...))
+			if err != nil {
+				return fmt.Errorf("Response in %s newUser: %s for node %s, error: %w", connType, node, response, err)
+			}
+			/*err = persistChange(ctx, v, mode)
+
+			if err != nil {
+				return fmt.Errorf("persist error for node %s: %w", node, err)
+			}*/
+		}
+	}
+
+	return nil
+}
