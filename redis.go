@@ -158,14 +158,11 @@ func (c *RedisDB) DeleteUser(ctx context.Context, req dbplugin.DeleteUserRequest
 }
 
 func newUser(ctx context.Context, db radix.MultiClient, username, mode string, req dbplugin.NewUserRequest) error {
-	fmt.Printf("statements = %#v\n", req.Statements.Commands)
 	statements := removeEmpty(req.Statements.Commands)
-	fmt.Printf("statements = %#v\n", statements)
 
 	if len(statements) == 0 {
 		statements = append(statements, defaultRedisUserRule)
 	}
-	fmt.Printf("statements = %#v\n", statements)
 
 	// setup REDIS command
 	aclargs := []string{"SETUSER", username, "ON", ">" + req.Password}
@@ -175,15 +172,12 @@ func newUser(ctx context.Context, db radix.MultiClient, username, mode string, r
 	if err != nil {
 		return errwrap.Wrapf("error unmarshalling REDIS rules in the creation statement JSON: {{err}}", err)
 	}
-	fmt.Printf("args = %#v\n", args)
 	// append the additional rules/permissions
 	aclargs = append(aclargs, args...)
 
 	var response string
 	var replicaSets map[string]radix.ReplicaSet
 	var connType string
-
-	fmt.Printf("*** db.(type) is %T\n", db)
 
 	switch db.(type) {
 
@@ -251,7 +245,6 @@ func (c *RedisDB) changeUserPassword(ctx context.Context, username, password str
 		connType = "Sentinel"
 
 	case radix.MultiClient:
-		fmt.Printf("*** got a MultiClient %T\n", db)
 		replicaSets, err = db.Clients()
 		connType = "MultiClient"
 
@@ -263,7 +256,6 @@ func (c *RedisDB) changeUserPassword(ctx context.Context, username, password str
 		return errwrap.Wrapf(fmt.Sprintf("retrieving %s clients failed error: {{err}}", connType), err)
 	}
 	for node, rs := range replicaSets {
-		fmt.Printf("<><><> processing node %s, rs's = %#v\n", node, rs)
 		for _, v := range getClientsFromRS(rs) {
 
 			err = v.Do(ctx, radix.Cmd(&mn, "ACL", "GETUSER", username))
@@ -301,7 +293,6 @@ func (c *RedisDB) changeUserPassword(ctx context.Context, username, password str
 		return errwrap.Wrapf(fmt.Sprintf("retrieving %s clients failed error: {{err}}", connType), err)
 	}
 	for node, rs := range replicaSets {
-		fmt.Printf("<><><> processing node %s, rs's = %#v\n", node, rs)
 		for _, v := range getClientsFromRS(rs) {
 			err = v.Do(ctx, radix.Cmd(&sresponse, "ACL", "SETUSER", username, "RESETPASS", ">"+password))
 			if err != nil {

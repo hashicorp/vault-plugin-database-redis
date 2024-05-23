@@ -23,6 +23,7 @@ type redisDBConnectionProducer struct {
 	Port        int    `json:"port"`
 	Secondaries string `json:"secondaries"`
 	Cluster     string `json:"cluster"`
+	Sentinels   string `json:"sentinels"`
 	Username    string `json:"username"`
 	Password    string `json:"password"`
 	TLS         bool   `json:"tls"`
@@ -68,9 +69,9 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 	}
 
 	switch {
-	case len(c.Host) == 0 && len(c.Cluster) == 0:
-		return nil, fmt.Errorf("cluster and host cannot be empty")
-	case len(c.Cluster) == 0 && c.Port == 0:
+	case len(c.Host) == 0 && len(c.Cluster) == 0 && len(c.Sentinels) == 0:
+		return nil, fmt.Errorf("host, cluster and sentinels cannot be empty")
+	case len(c.Cluster) == 0 && len(c.Sentinels) == 0 && c.Port == 0:
 		return nil, fmt.Errorf("port cannot be empty")
 	case len(c.Username) == 0:
 		return nil, fmt.Errorf("username cannot be empty")
@@ -159,6 +160,15 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (interface{}
 			PoolConfig: poolConfig,
 		}
 		c.client, err = clusterConfig.New(ctx, hosts)
+		if err != nil {
+			return nil, err
+		}
+	} else if len(c.Sentinels) != 0 {
+		hosts := strings.Split(c.Sentinels, ",")
+		sentinelConfig := radix.SentinelConfig{
+			PoolConfig: poolConfig,
+		}
+		c.client, err = sentinelConfig.New(ctx, "mymaster", hosts)
 		if err != nil {
 			return nil, err
 		}
