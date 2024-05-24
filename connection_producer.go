@@ -19,17 +19,18 @@ import (
 )
 
 type redisDBConnectionProducer struct {
-	Host        string `json:"host"`
-	Port        int    `json:"port"`
-	Secondaries string `json:"secondaries"`
-	Cluster     string `json:"cluster"`
-	Sentinels   string `json:"sentinels"`
-	Username    string `json:"username"`
-	Password    string `json:"password"`
-	TLS         bool   `json:"tls"`
-	InsecureTLS bool   `json:"insecure_tls"`
-	CACert      string `json:"ca_cert"`
-	Persistence string `json:"persistence_mode"`
+	Host               string `json:"host"`
+	Port               int    `json:"port"`
+	Secondaries        string `json:"secondaries"`
+	Cluster            string `json:"cluster"`
+	Sentinels          string `json:"sentinels"`
+	SentinelMasterName string `json:"sentinel_master_name"`
+	Username           string `json:"username"`
+	Password           string `json:"password"`
+	TLS                bool   `json:"tls"`
+	InsecureTLS        bool   `json:"insecure_tls"`
+	CACert             string `json:"ca_cert"`
+	Persistence        string `json:"persistence_mode"`
 
 	Initialized bool
 	rawConfig   map[string]interface{}
@@ -79,6 +80,9 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 		return nil, fmt.Errorf("password cannot be empty")
 	}
 
+	if len(c.Sentinels) != 0 && len(c.SentinelMasterName) == 0 {
+		return nil, fmt.Errorf("sentinel_master_name cannot be empty when creating a Redis Sentinel connection")
+	}
 	c.Addr = net.JoinHostPort(c.Host, strconv.Itoa(c.Port))
 
 	if c.TLS {
@@ -168,7 +172,7 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (interface{}
 		sentinelConfig := radix.SentinelConfig{
 			PoolConfig: poolConfig,
 		}
-		c.client, err = sentinelConfig.New(ctx, "mymaster", hosts)
+		c.client, err = sentinelConfig.New(ctx, c.SentinelMasterName, hosts)
 		if err != nil {
 			return nil, err
 		}
