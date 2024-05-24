@@ -68,12 +68,12 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 	if err != nil {
 		return nil, err
 	}
-
+fmt.Printf("c=%#v\n", c)
 	switch {
 	case len(c.Host) == 0 && len(c.Cluster) == 0 && len(c.Sentinels) == 0:
-		return nil, fmt.Errorf("primary_host, cluster and sentinels cannot be empty")
+		return nil, fmt.Errorf("parameter primary_host, cluster or sentinels must be set")
 	case len(c.Cluster) == 0 && len(c.Sentinels) == 0 && c.Port == 0:
-		return nil, fmt.Errorf("primary_port cannot be empty")
+		return nil, fmt.Errorf("parameter primary_port cannot be empty")
 	case len(c.Username) == 0:
 		return nil, fmt.Errorf("username cannot be empty")
 	case len(c.Password) == 0:
