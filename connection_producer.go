@@ -19,8 +19,8 @@ import (
 )
 
 type redisDBConnectionProducer struct {
-	Host               string `json:"host"`
-	Port               int    `json:"port"`
+	Host               string `json:"primary_host"`
+	Port               int    `json:"primary_port"`
 	Secondaries        string `json:"secondaries"`
 	Cluster            string `json:"cluster"`
 	Sentinels          string `json:"sentinels"`
@@ -71,9 +71,9 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 
 	switch {
 	case len(c.Host) == 0 && len(c.Cluster) == 0 && len(c.Sentinels) == 0:
-		return nil, fmt.Errorf("host, cluster and sentinels cannot be empty")
+		return nil, fmt.Errorf("primary_host, cluster and sentinels cannot be empty")
 	case len(c.Cluster) == 0 && len(c.Sentinels) == 0 && c.Port == 0:
-		return nil, fmt.Errorf("port cannot be empty")
+		return nil, fmt.Errorf("primary_port cannot be empty")
 	case len(c.Username) == 0:
 		return nil, fmt.Errorf("username cannot be empty")
 	case len(c.Password) == 0:

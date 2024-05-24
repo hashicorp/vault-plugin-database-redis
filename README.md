@@ -4,7 +4,14 @@ A [Vault](https://www.vaultproject.io) plugin for Redis
 
 This project uses the database plugin interface introduced in Vault version 0.7.1.
 
-The plugin supports the generation of static and dynamic user roles and root credential rotation on a stand alone redis server.
+The plugin supports the generation of static and dynamic user roles and root credential rotation on the following Redis installations...
+
+- Single primary server
+- Primary server and 1 - N secondary (readonly) servers
+- Redis Cluster
+- Redis Sentinel
+
+The plugin can also be configured to persist the generated credentials either to the servers local ACL file should one be configured or to the Redis configuration file with the `CONFIG REWRITE` command.
 
 ## Build
 
@@ -59,7 +66,7 @@ $ vault write sys/plugins/catalog/database/vault-plugin-database-redis sha256=$S
 
 At this stage you are now ready to initialize the plugin to connect to the redis db using unencrypted or encrypted communications.
 
-Prior to initializing the plugin, ensure that you have created an administration account. Vault will use the user specified here to create/update/revoke database credentials. That user must have the appropriate rule `+@admin` to perform actions upon other database users.
+Prior to initializing the plugin, ensure that you have created an administration account. Vault will use the user specified here to create/update/revoke database credentials. That user must have the appropriate rule `+@admin` to perform actions upon other database users. If you are using a Redis cluster then the user must have these two additional rules `+readonly +cluster`.
 
 ### Plugin Initialization
 
@@ -73,9 +80,26 @@ $ vault write database/config/my-redis plugin_name="vault-plugin-database-redis"
 # You should consider rotating the admin password. Note that if you do, the new password will never be made available
 # through Vault, so you should create a vault-specific database admin user for this.
 $ vault write -force database/rotate-root/my-redis
-
  ```
+#### Primary REDIS Server and read only secondary replicas.
 
+#### REDIS Cluster.
+
+```bash
+vault write database/config/my-redis plugin_name="vault-plugin-database-redis" \
+       cluster="localhost:7001" \
+       username=default password=user-pa55w0rd \
+       allowed_roles="*" persistence_mode="REWRITE"
+```
+#### REDIS Sentinel.
+
+```bash
+vault write database/config/my-redis plugin_name="vault-plugin-database-redis" \
+      sentinels="172.27.0.6:26379,172.27.0.7:26379,172.27.0.5" sentinel_master_name=dear_racer \
+      username=default password=default-pa55w0rd 'allowed_roles=*' \
+      persistence_mode=ACLFILE
+#Success! Data written to: database/config/my-redis
+ ```
 ### Dynamic Role Creation
 
 When you create roles, you need to provide a JSON string containing the Redis ACL rules which are documented [here](https://redis.io/commands/acl-cat) or in the output of the `ACL CAT` redis command.
