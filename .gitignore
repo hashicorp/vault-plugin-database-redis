@@ -4,14 +4,11 @@
 pkg/*
 bin/*
 
-bootstrap/terraform/.terraform
-bootstrap/terraform/terraform.tfstate
-bootstrap/terraform/terraform.tfstate.backup
 bootstrap/terraform/local_environment_setup.sh
 scripts/tests/tls
-*/.terraform
-*/terraform.tfstate
-*/terraform.rfstate.backup
+**/.terraform*
+**/terraform.tfstate
+**/terraform.rfstate.backup
 *~
 *#
 .#*
