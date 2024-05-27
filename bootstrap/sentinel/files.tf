@@ -22,11 +22,12 @@ sentinel sentinel-pass default-pa55w0rd
 #requirepass default-pa55w0rd
 #sentinel announce-ip $${ANNOUNCE_IP%% *}
 #sentinel announce-port $ANNOUNCE_PORT
-#aclfile $ACL_FILE
+aclfile $ACL_FILE
 " > $CONF_FILE
 
-echo "user default on sanitize-payload #338b13e36315b0a2114e0ea1b2157327e8310edb5faacbb9120b1f643ba1130b ~* &*  +client +subscribe +publish +ping +info +multi +slaveof +config +client +exec
-user Administrator on sanitize-payload #5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8 resetchannels +client +subscribe +publish +ping +info +multi +slaveof +config +client +exec" > $ACL_FILE
+echo "user default on sanitize-payload #338b13e36315b0a2114e0ea1b2157327e8310edb5faacbb9120b1f643ba1130b ~* &*  +@all
+user Administrator on sanitize-payload #5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8 resetchannels -@all +@admin
+" > $ACL_FILE
 
 # start server
 redis-server $CONF_FILE --sentinel

@@ -27,6 +27,8 @@ type redisDBConnectionProducer struct {
 	SentinelMasterName string `json:"sentinel_master_name"`
 	Username           string `json:"username"`
 	Password           string `json:"password"`
+	SentinelUsername   string `json:"sentinel_username"`
+	SentinelPassword   string `json:"sentinel_password"`
 	TLS                bool   `json:"tls"`
 	InsecureTLS        bool   `json:"insecure_tls"`
 	CACert             string `json:"ca_cert"`
@@ -68,7 +70,7 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 	if err != nil {
 		return nil, err
 	}
-fmt.Printf("c=%#v\n", c)
+
 	switch {
 	case len(c.Host) == 0 && len(c.Cluster) == 0 && len(c.Sentinels) == 0:
 		return nil, fmt.Errorf("parameter primary_host, cluster or sentinels must be set")
@@ -169,8 +171,13 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (interface{}
 		}
 	} else if len(c.Sentinels) != 0 {
 		hosts := strings.Split(c.Sentinels, ",")
+		dialer, err := c.GetDialer(c.SentinelUsername, c.SentinelPassword)
+		if err != nil {
+			return nil, err
+		}
 		sentinelConfig := radix.SentinelConfig{
-			PoolConfig: poolConfig,
+			PoolConfig:     poolConfig,
+			SentinelDialer: dialer,
 		}
 		c.client, err = sentinelConfig.New(ctx, c.SentinelMasterName, hosts)
 		if err != nil {
@@ -222,4 +229,31 @@ func (c *redisDBConnectionProducer) Close() error {
 	defer c.Unlock()
 
 	return c.close()
+}
+
+// Get a Dialer
+func (c *redisDBConnectionProducer) GetDialer(username, password string) (dialer radix.Dialer, err error) {
+	if c.TLS {
+		rootCAs := x509.NewCertPool()
+		ok := rootCAs.AppendCertsFromPEM([]byte(c.CACert))
+		if !ok {
+			return radix.Dialer{}, fmt.Errorf("failed to parse root certificate")
+		}
+		dialer = radix.Dialer{
+			AuthUser: username,
+			AuthPass: password,
+			NetDialer: &tls.Dialer{
+				Config: &tls.Config{
+					RootCAs:            rootCAs,
+					InsecureSkipVerify: c.InsecureTLS,
+				},
+			},
+		}
+	} else {
+		dialer = radix.Dialer{
+			AuthUser: username,
+			AuthPass: password,
+		}
+	}
+	return dialer, nil
 }

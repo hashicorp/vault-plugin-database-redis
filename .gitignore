@@ -7,7 +7,7 @@ bin/*
 bootstrap/terraform/local_environment_setup.sh
 scripts/tests/tls
 **/.terraform*
-**/terraform.tfstate
+**/terraform.tfstate*
 **/terraform.rfstate.backup
 *~
 *#

@@ -19,14 +19,16 @@ import (
 )
 
 const (
-	defaultUsername = "default"
-	defaultPassword = "default-pa55w0rd"
-	adminUsername   = "Administrator"
-	adminPassword   = "password"
-	aclCat          = "+@admin"
-	testRedisRole   = `["%s"]`
-	testRedisGroup  = `["+@all"]`
-	testRedisRole3  = `["%s", "%s", "%s"]`
+	defaultUsername  = "default"
+	defaultPassword  = "default-pa55w0rd"
+	adminUsername    = "Administrator"
+	adminPassword    = "password"
+	sentinelUsername = defaultUsername
+	sentinelPassword = defaultPassword
+	aclCat           = "+@admin"
+	testRedisRole    = `["%s"]`
+	testRedisGroup   = `["+@all"]`
+	testRedisRole3   = `["%s", "%s", "%s"]`
 )
 
 var (
@@ -49,7 +51,7 @@ func prepareRedisTestContainer(t *testing.T) (func(), string, int) {
 		if err != nil {
 			port = 6379
 		}
-fmt.Printf("HOST = %s, port=%d\n", env, port)
+		fmt.Printf("HOST = %s, port=%d\n", env, port)
 		return func() {}, env, port
 	}
 	if env := os.Getenv("TEST_REDIS_CLUSTER"); env != "" {
@@ -169,7 +171,7 @@ func TestDriver(t *testing.T) {
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_DefaultRule(t, host, port) })
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_plusRole(t, host, port) })
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_groupOnly(t, host, port) })
-	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_roleAndGroup(t, host, port) })
+	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_roleAndSelector(t, host, port) })
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_persistAclFile(t, host, port) })
 	// t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreate_persistConfig(t, host, port) })
 	t.Run("Rotate", func(t *testing.T) { testRedisDBRotateRootCredentials(t, host, port) })
@@ -209,14 +211,16 @@ func testRedisDBInitialize_NoTLS(t *testing.T, host string, port int) {
 	t.Log("Testing plain text Init()")
 
 	connectionDetails := map[string]interface{}{
-		"primary_host":                 host,
-		"primary_port":                 port,
+		"primary_host":         host,
+		"primary_port":         port,
 		"secondaries":          redis_secondaries,
 		"cluster":              redis_cluster_hosts,
 		"sentinels":            redis_sentinel_hosts,
 		"sentinel_master_name": redis_sentinel_master_name,
 		"username":             adminUsername,
 		"password":             adminPassword,
+		"sentinel_username":    sentinelUsername,
+		"sentinel_password":    sentinelPassword,
 	}
 	err := setupRedisDBInitialize(t, connectionDetails)
 	if err != nil {
@@ -237,22 +241,19 @@ func testRedisDBInitialize_TLS(t *testing.T, host string, port int) {
 
 	t.Log("Testing TLS Init()")
 
-	var cluster_hosts string
-
-	if port == -1 {
-		cluster_hosts = host
-		host = ""
-	}
-
 	connectionDetails := map[string]interface{}{
-		"primary_host":        host,
-		"primary_port":        port,
-		"secondaries": redis_secondaries,
-		"cluster":     cluster_hosts,
-		"username":    adminUsername,
-		"password":    adminPassword,
-		"tls":         true,
-		"cacrt":       CACert,
+		"primary_host":         host,
+		"primary_port":         port,
+		"secondaries":          redis_secondaries,
+		"cluster":              redis_cluster_hosts,
+		"sentinels":            redis_sentinel_hosts,
+		"sentinel_master_name": redis_sentinel_master_name,
+		"username":             adminUsername,
+		"password":             adminPassword,
+		"sentinel_username":    sentinelUsername,
+		"sentinel_password":    sentinelPassword,
+		"tls":                  true,
+		"ca_cert":              CACert,
 	}
 	err = setupRedisDBInitialize(t, connectionDetails)
 	if err != nil {
@@ -268,15 +269,18 @@ func testRedisDBInitialize_persistence(t *testing.T, host string, port int) {
 	t.Log("Testing plain text Init() with persistence_mode")
 
 	connectionDetails := map[string]interface{}{
-		"primary_host":                 host,
-		"primary_port":                 port,
+		"primary_host":         host,
+		"primary_port":         port,
 		"secondaries":          redis_secondaries,
 		"cluster":              redis_cluster_hosts,
 		"sentinels":            redis_sentinel_hosts,
 		"sentinel_master_name": redis_sentinel_master_name,
 		"username":             adminUsername,
 		"password":             adminPassword,
-		"persistence_mode":     "garbage",
+		"sentinel_username":    sentinelUsername,
+		"sentinel_password":    sentinelPassword,
+
+		"persistence_mode": "garbage",
 	}
 
 	err := setupRedisDBInitialize(t, connectionDetails)
@@ -286,14 +290,16 @@ func testRedisDBInitialize_persistence(t *testing.T, host string, port int) {
 	}
 
 	connectionDetails = map[string]interface{}{
-		"primary_host":                 host,
-		"primary_port":                 port,
+		"primary_host":         host,
+		"primary_port":         port,
 		"secondaries":          redis_secondaries,
 		"cluster":              redis_cluster_hosts,
 		"sentinels":            redis_sentinel_hosts,
 		"sentinel_master_name": redis_sentinel_master_name,
 		"username":             adminUsername,
 		"password":             adminPassword,
+		"sentinel_username":    sentinelUsername,
+		"sentinel_password":    sentinelPassword,
 		"persistence_mode":     "rewrite",
 	}
 
@@ -303,14 +309,16 @@ func testRedisDBInitialize_persistence(t *testing.T, host string, port int) {
 	}
 
 	connectionDetails = map[string]interface{}{
-		"primary_host":                 host,
-		"primary_port":                 port,
+		"primary_host":         host,
+		"primary_port":         port,
 		"secondaries":          redis_secondaries,
 		"cluster":              redis_cluster_hosts,
 		"sentinels":            redis_sentinel_hosts,
 		"sentinel_master_name": redis_sentinel_master_name,
 		"username":             adminUsername,
 		"password":             adminPassword,
+		"sentinel_username":    sentinelUsername,
+		"sentinel_password":    sentinelPassword,
 		"persistence_mode":     "aclfile",
 	}
 
@@ -329,20 +337,22 @@ func testRedisDBCreateUser(t *testing.T, address string, port int) {
 
 	host := address
 	var rule []string
-
+	// if it is a cluster then these two rules are needed for the user to be able to connect.
 	if len(redis_cluster_hosts) != 0 {
 		rule = []string{`["+readonly", "+cluster"]`}
 	}
 
 	connectionDetails := map[string]interface{}{
-		"primary_host":                 host,
-		"primary_port":                 port,
+		"primary_host":         host,
+		"primary_port":         port,
 		"secondaries":          redis_secondaries,
 		"cluster":              redis_cluster_hosts,
 		"sentinels":            redis_sentinel_hosts,
 		"sentinel_master_name": redis_sentinel_master_name,
 		"username":             adminUsername,
 		"password":             adminPassword,
+		"sentinel_username":    sentinelUsername,
+		"sentinel_password":    sentinelPassword,
 	}
 
 	if redisTls {
@@ -417,14 +427,16 @@ func checkCredsExist(t *testing.T, username, password, address string, port int)
 	}
 
 	connectionDetails := map[string]interface{}{
-		"primary_host":                 host,
-		"primary_port":                 port,
+		"primary_host":         host,
+		"primary_port":         port,
 		"secondaries":          redis_secondaries,
 		"cluster":              redis_cluster_hosts,
 		"sentinels":            redis_sentinel_hosts,
 		"sentinel_master_name": redis_sentinel_master_name,
 		"username":             username,
 		"password":             password,
+		"sentinel_username":    sentinelUsername,
+		"sentinel_password":    sentinelPassword,
 	}
 
 	if redisTls {
@@ -472,14 +484,16 @@ func checkRuleAllowed(t *testing.T, username, password, address string, port int
 	}
 
 	connectionDetails := map[string]interface{}{
-		"primary_host":                 host,
-		"primary_port":                 port,
+		"primary_host":         host,
+		"primary_port":         port,
 		"secondaries":          redis_secondaries,
 		"cluster":              redis_cluster_hosts,
 		"sentinels":            redis_sentinel_hosts,
 		"sentinel_master_name": redis_sentinel_master_name,
 		"username":             username,
 		"password":             password,
+		"sentinel_username":    sentinelUsername,
+		"sentinel_password":    sentinelPassword,
 	}
 
 	if redisTls {
@@ -527,14 +541,16 @@ func revokeUser(t *testing.T, username, address string, port int) error {
 	host := address
 
 	connectionDetails := map[string]interface{}{
-		"primary_host":                 host,
-		"primary_port":                 port,
+		"primary_host":         host,
+		"primary_port":         port,
 		"secondaries":          redis_secondaries,
 		"cluster":              redis_cluster_hosts,
 		"sentinels":            redis_sentinel_hosts,
 		"sentinel_master_name": redis_sentinel_master_name,
 		"username":             adminUsername,
 		"password":             adminPassword,
+		"sentinel_username":    sentinelUsername,
+		"sentinel_password":    sentinelPassword,
 	}
 
 	if redisTls {
@@ -582,15 +598,25 @@ func testRedisDBCreateUser_DefaultRule(t *testing.T, address string, port int) {
 
 	host := address
 
+	var rules []string
+	// cluster user needs additional permissions.
+	if len(redis_cluster_hosts) != 0 {
+		rules = []string{`["~foo", "+@read", "+readonly", "+cluster"]`}
+	} else {
+		rules = []string{`["~foo", "+@read"]`}
+	}
+
 	connectionDetails := map[string]interface{}{
-		"primary_host":                 host,
-		"primary_port":                 port,
+		"primary_host":         host,
+		"primary_port":         port,
 		"secondaries":          redis_secondaries,
 		"cluster":              redis_cluster_hosts,
 		"sentinels":            redis_sentinel_hosts,
 		"sentinel_master_name": redis_sentinel_master_name,
 		"username":             adminUsername,
 		"password":             adminPassword,
+		"sentinel_username":    sentinelUsername,
+		"sentinel_password":    sentinelPassword,
 	}
 
 	if redisTls {
@@ -629,7 +655,7 @@ func testRedisDBCreateUser_DefaultRule(t *testing.T, address string, port int) {
 			RoleName:    username,
 		},
 		Statements: dbplugin.Statements{
-			Commands: []string{`["~foo", "+@read", "+readonly", "+cluster"]`},
+			Commands: rules,
 		},
 		Password:   password,
 		Expiration: time.Now().Add(time.Minute * 5),
@@ -643,13 +669,13 @@ func testRedisDBCreateUser_DefaultRule(t *testing.T, address string, port int) {
 	if err := checkCredsExist(t, userResp.Username, password, address, port); err != nil {
 		t.Fatalf("Could not connect with new credentials: %s", err)
 	}
-	rules := []string{"foo"}
-	if err := checkRuleAllowed(t, userResp.Username, password, address, port, "get", rules); err != nil {
+	params := []string{"foo"}
+	if err := checkRuleAllowed(t, userResp.Username, password, address, port, "get", params); err != nil {
 		t.Fatalf("get failed for user %s with +@read rule: %s", userResp.Username, err)
 	}
 
-	rules = []string{"foo", "bar"}
-	if err = checkRuleAllowed(t, userResp.Username, password, address, port, "set", rules); err == nil {
+	params = []string{"foo", "bar"}
+	if err = checkRuleAllowed(t, userResp.Username, password, address, port, "set", params); err == nil {
 		t.Fatalf("set did not fail user %s with +@read rule: %s", userResp.Username, err)
 	}
 
@@ -675,14 +701,16 @@ func testRedisDBCreateUser_plusRole(t *testing.T, address string, port int) {
 	}
 
 	connectionDetails := map[string]interface{}{
-		"primary_host":                 host,
-		"primary_port":                 port,
+		"primary_host":         host,
+		"primary_port":         port,
 		"secondaries":          redis_secondaries,
 		"cluster":              redis_cluster_hosts,
 		"sentinels":            redis_sentinel_hosts,
 		"sentinel_master_name": redis_sentinel_master_name,
 		"username":             adminUsername,
 		"password":             adminPassword,
+		"sentinel_username":    sentinelUsername,
+		"sentinel_password":    sentinelPassword,
 	}
 
 	if redisTls {
@@ -755,14 +783,16 @@ func testRedisDBCreateUser_groupOnly(t *testing.T, address string, port int) {
 	}
 
 	connectionDetails := map[string]interface{}{
-		"primary_host":                 host,
-		"primary_port":                 port,
+		"primary_host":         host,
+		"primary_port":         port,
 		"secondaries":          redis_secondaries,
 		"cluster":              redis_cluster_hosts,
 		"sentinels":            redis_sentinel_hosts,
 		"sentinel_master_name": redis_sentinel_master_name,
 		"username":             adminUsername,
 		"password":             adminPassword,
+		"sentinel_username":    sentinelUsername,
+		"sentinel_password":    sentinelPassword,
 	}
 
 	if redisTls {
@@ -823,25 +853,33 @@ func testRedisDBCreateUser_groupOnly(t *testing.T, address string, port int) {
 	}
 }
 
-func testRedisDBCreateUser_roleAndGroup(t *testing.T, address string, port int) {
+func testRedisDBCreateUser_roleAndSelector(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
 
+	t.Log("Testing CreateUser() with selector rule")
 	host := address
 
-	if port == -1 {
-		host = ""
+	var rules []string
+	// cluster user needs additional permissions.
+	if len(redis_cluster_hosts) != 0 {
+		rules = []string{`["+GET", "allkeys", "(+SET ~app1*)", "+readonly", "+cluster"]`}
+	} else {
+		rules = []string{`["+GET", "allkeys", "(+SET ~app1*)"]`}
 	}
+
 	connectionDetails := map[string]interface{}{
-		"primary_host":                 host,
-		"primary_port":                 port,
+		"primary_host":         host,
+		"primary_port":         port,
 		"secondaries":          redis_secondaries,
 		"cluster":              redis_cluster_hosts,
 		"sentinels":            redis_sentinel_hosts,
 		"sentinel_master_name": redis_sentinel_master_name,
 		"username":             adminUsername,
 		"password":             adminPassword,
+		"sentinel_username":    sentinelUsername,
+		"sentinel_password":    sentinelPassword,
 	}
 
 	if redisTls {
@@ -879,7 +917,7 @@ func testRedisDBCreateUser_roleAndGroup(t *testing.T, address string, port int) 
 			RoleName:    "test",
 		},
 		Statements: dbplugin.Statements{
-			Commands: []string{fmt.Sprintf(testRedisRole3, aclCat, "+readonly", "+cluster")},
+			Commands: rules,
 		},
 		Password:   password,
 		Expiration: time.Now().Add(time.Minute),
@@ -913,21 +951,19 @@ func testRedisDBCreateUser_persistAclFile(t *testing.T, address string, port int
 
 	host := address
 
-	if port < 0 {
-		host = ""
-	}
-
 	t.Log("Testing CreateUser_persist()")
 
 	connectionDetails := map[string]interface{}{
-		"primary_host":                 host,
-		"primary_port":                 port,
+		"primary_host":         host,
+		"primary_port":         port,
 		"secondaries":          redis_secondaries,
 		"cluster":              redis_cluster_hosts,
 		"sentinels":            redis_sentinel_hosts,
 		"sentinel_master_name": redis_sentinel_master_name,
 		"username":             adminUsername,
 		"password":             adminPassword,
+		"sentinel_username":    sentinelUsername,
+		"sentinel_password":    sentinelPassword,
 		"persistence_mode":     "aclfile",
 	}
 
@@ -998,19 +1034,17 @@ func testRedisDBRotateRootCredentials(t *testing.T, address string, port int) {
 
 	host := address
 
-	if port < 0 {
-		host = ""
-	}
-
 	connectionDetails := map[string]interface{}{
-		"primary_host":                 host,
-		"primary_port":                 port,
+		"primary_host":         host,
+		"primary_port":         port,
 		"secondaries":          redis_secondaries,
 		"cluster":              redis_cluster_hosts,
 		"sentinels":            redis_sentinel_hosts,
 		"sentinel_master_name": redis_sentinel_master_name,
 		"username":             "rotate-root",
 		"password":             "rotate-rootpassword",
+		"sentinel_username":    sentinelUsername,
+		"sentinel_password":    sentinelPassword,
 	}
 
 	if redisTls {
@@ -1067,19 +1101,17 @@ func doRedisDBSetCredentials(t *testing.T, username, password, address string, p
 
 	host := address
 
-	if port < 0 {
-		host = ""
-	}
-
 	connectionDetails := map[string]interface{}{
-		"primary_host":                 host,
-		"primary_port":                 port,
+		"primary_host":         host,
+		"primary_port":         port,
 		"secondaries":          redis_secondaries,
 		"cluster":              redis_cluster_hosts,
 		"sentinels":            redis_sentinel_hosts,
 		"sentinel_master_name": redis_sentinel_master_name,
 		"username":             adminUsername,
 		"password":             adminPassword,
+		"sentinel_username":    sentinelUsername,
+		"sentinel_password":    sentinelPassword,
 	}
 
 	if redisTls {
@@ -1188,14 +1220,16 @@ func checkPersistenceMode(address string, port int, adminUsername, adminPassword
 	}
 
 	connectionDetails := map[string]interface{}{
-		"primary_host":                 host,
-		"primary_port":                 port,
+		"primary_host":         host,
+		"primary_port":         port,
 		"secondaries":          redis_secondaries,
 		"cluster":              redis_cluster_hosts,
 		"sentinels":            redis_sentinel_hosts,
 		"sentinel_master_name": redis_sentinel_master_name,
 		"username":             adminUsername,
 		"password":             adminPassword,
+		"sentinel_username":    sentinelUsername,
+		"sentinel_password":    sentinelPassword,
 	}
 	if redisTls {
 		CACertFile := os.Getenv("CA_CERT_FILE")
@@ -1260,9 +1294,11 @@ func checkPersistenceMode(address string, port int, adminUsername, adminPassword
 			if err != nil {
 				return err, ""
 			} else if mb.Null {
-				fmt.Printf("ACLFILE NOT SET\n")
+				return fmt.Errorf("Error geting ACLFILE config setting"), ""
 			} else {
-				fmt.Printf("ACLFILE IS SET %#v on node %s\n", response, v.Addr().String())
+				if len(response[1]) == 0 {
+					return fmt.Errorf("ACL file not set on REDIS node %q, persistence not possible.", v.Addr().String()), ""
+				}
 			}
 		}
 	}
@@ -1287,14 +1323,16 @@ func createUser(address string, port int, adminUsername, adminPassword, username
 	}
 
 	connectionDetails := map[string]interface{}{
-		"primary_host":                 host,
-		"primary_port":                 port,
+		"primary_host":         host,
+		"primary_port":         port,
 		"secondaries":          redis_secondaries,
 		"cluster":              redis_cluster_hosts,
 		"sentinels":            redis_sentinel_hosts,
 		"sentinel_master_name": redis_sentinel_master_name,
 		"username":             adminUsername,
 		"password":             adminPassword,
+		"sentinel_username":    sentinelUsername,
+		"sentinel_password":    sentinelPassword,
 	}
 
 	if redisTls {

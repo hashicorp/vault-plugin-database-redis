@@ -159,10 +159,11 @@ func (c *RedisDB) DeleteUser(ctx context.Context, req dbplugin.DeleteUserRequest
 
 func newUser(ctx context.Context, db radix.MultiClient, username, mode string, req dbplugin.NewUserRequest) error {
 	statements := removeEmpty(req.Statements.Commands)
-
+	fmt.Printf("%#v\n", statements)
 	if len(statements) == 0 {
 		statements = append(statements, defaultRedisUserRule)
 	}
+	fmt.Printf("%#v\n", statements)
 
 	// setup REDIS command
 	aclargs := []string{"SETUSER", username, "ON", ">" + req.Password}
@@ -172,6 +173,8 @@ func newUser(ctx context.Context, db radix.MultiClient, username, mode string, r
 	if err != nil {
 		return errwrap.Wrapf("error unmarshalling REDIS rules in the creation statement JSON: {{err}}", err)
 	}
+	fmt.Printf("args: %#v\n", args)
+
 	// append the additional rules/permissions
 	aclargs = append(aclargs, args...)
 
