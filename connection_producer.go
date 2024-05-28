@@ -32,6 +32,8 @@ type redisDBConnectionProducer struct {
 	TLS                bool   `json:"tls"`
 	InsecureTLS        bool   `json:"insecure_tls"`
 	CACert             string `json:"ca_cert"`
+	TLSCert            string `json:"tls_cert"`
+	TLSKey             string `json:"tls_key"`
 	Persistence        string `json:"persistence_mode"`
 
 	Initialized bool
@@ -91,6 +93,10 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 		if len(c.CACert) == 0 {
 			return nil, fmt.Errorf("ca_cert cannot be empty")
 		}
+		if (len(c.TLSCert) == 0 && len(c.TLSKey) != 0) ||
+			(len(c.TLSCert) != 0 && len(c.TLSKey) == 0) {
+			return nil, fmt.Errorf("tls_cert and tls_key pair must both be set for mutual TLS")
+		}
 	}
 
 	// ??c.Connected = false
@@ -139,6 +145,14 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (interface{}
 		if !ok {
 			return nil, fmt.Errorf("failed to parse root certificate")
 		}
+		// Mutual TLS required (client cert)
+		var cert tls.Certificate
+		if len(c.TLSCert) != 0 {
+			cert, err = tls.X509KeyPair([]byte(c.TLSCert), []byte(c.TLSKey))
+			if err != nil {
+				return nil, fmt.Errorf("failed to create key pair from tls_cert and tls_key parameters: %w", err)
+			}
+		}
 		poolConfig = radix.PoolConfig{
 			Dialer: radix.Dialer{
 				AuthUser: c.Username,
@@ -146,6 +160,7 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (interface{}
 				NetDialer: &tls.Dialer{
 					Config: &tls.Config{
 						RootCAs:            rootCAs,
+						Certificates:       []tls.Certificate{cert},
 						InsecureSkipVerify: c.InsecureTLS,
 					},
 				},
@@ -239,12 +254,21 @@ func (c *redisDBConnectionProducer) GetDialer(username, password string) (dialer
 		if !ok {
 			return radix.Dialer{}, fmt.Errorf("failed to parse root certificate")
 		}
+		// Mutual TLS required (client cert)
+		var cert tls.Certificate
+		if len(c.TLSCert) != 0 {
+			cert, err = tls.X509KeyPair([]byte(c.TLSCert), []byte(c.TLSKey))
+			if err != nil {
+				return radix.Dialer{}, fmt.Errorf("failed to create key pair from tls_cert and tls_key parameters: %w", err)
+			}
+		}
 		dialer = radix.Dialer{
 			AuthUser: username,
 			AuthPass: password,
 			NetDialer: &tls.Dialer{
 				Config: &tls.Config{
 					RootCAs:            rootCAs,
+					Certificates:       []tls.Certificate{cert},
 					InsecureSkipVerify: c.InsecureTLS,
 				},
 			},

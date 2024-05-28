@@ -233,12 +233,6 @@ func testRedisDBInitialize_TLS(t *testing.T, host string, port int) {
 		t.Skip("skipping TLS Init() test in plain text mode")
 	}
 
-	CACertFile := os.Getenv("CA_CERT_FILE")
-	CACert, err := os.ReadFile(CACertFile)
-	if err != nil {
-		t.Fatal(fmt.Errorf("unable to read CA_CERT_FILE at %v: %w", CACertFile, err))
-	}
-
 	t.Log("Testing TLS Init()")
 
 	connectionDetails := map[string]interface{}{
@@ -252,10 +246,12 @@ func testRedisDBInitialize_TLS(t *testing.T, host string, port int) {
 		"password":             adminPassword,
 		"sentinel_username":    sentinelUsername,
 		"sentinel_password":    sentinelPassword,
-		"tls":                  true,
-		"ca_cert":              CACert,
 	}
-	err = setupRedisDBInitialize(t, connectionDetails)
+
+	if err := setupCertificates(&connectionDetails); err != nil {
+		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
+	}
+	err := setupRedisDBInitialize(t, connectionDetails)
 	if err != nil {
 		t.Fatalf("Testing TLS Init() failed: error: %s", err)
 	}
@@ -355,16 +351,8 @@ func testRedisDBCreateUser(t *testing.T, address string, port int) {
 		"sentinel_password":    sentinelPassword,
 	}
 
-	if redisTls {
-		CACertFile := os.Getenv("CA_CERT_FILE")
-		CACert, err := os.ReadFile(CACertFile)
-		if err != nil {
-			t.Fatal(fmt.Errorf("unable to read CA_CERT_FILE at %v: %w", CACertFile, err))
-		}
-
-		connectionDetails["tls"] = true
-		connectionDetails["ca_cert"] = CACert
-		connectionDetails["insecure_tls"] = true
+	if err := setupCertificates(&connectionDetails); err != nil {
+		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -439,16 +427,8 @@ func checkCredsExist(t *testing.T, username, password, address string, port int)
 		"sentinel_password":    sentinelPassword,
 	}
 
-	if redisTls {
-		CACertFile := os.Getenv("CA_CERT_FILE")
-		CACert, err := os.ReadFile(CACertFile)
-		if err != nil {
-			t.Fatal(fmt.Errorf("unable to read CA_CERT_FILE at %v: %w", CACertFile, err))
-		}
-
-		connectionDetails["tls"] = true
-		connectionDetails["ca_cert"] = CACert
-		connectionDetails["insecure_tls"] = true
+	if err := setupCertificates(&connectionDetails); err != nil {
+		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -496,16 +476,8 @@ func checkRuleAllowed(t *testing.T, username, password, address string, port int
 		"sentinel_password":    sentinelPassword,
 	}
 
-	if redisTls {
-		CACertFile := os.Getenv("CA_CERT_FILE")
-		CACert, err := os.ReadFile(CACertFile)
-		if err != nil {
-			t.Fatal(fmt.Errorf("unable to read CA_CERT_FILE at %v: %w", CACertFile, err))
-		}
-
-		connectionDetails["tls"] = true
-		connectionDetails["ca_cert"] = CACert
-		connectionDetails["insecure_tls"] = true
+	if err := setupCertificates(&connectionDetails); err != nil {
+		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -553,16 +525,8 @@ func revokeUser(t *testing.T, username, address string, port int) error {
 		"sentinel_password":    sentinelPassword,
 	}
 
-	if redisTls {
-		CACertFile := os.Getenv("CA_CERT_FILE")
-		CACert, err := os.ReadFile(CACertFile)
-		if err != nil {
-			t.Fatal(fmt.Errorf("unable to read CA_CERT_FILE at %v: %w", CACertFile, err))
-		}
-
-		connectionDetails["tls"] = true
-		connectionDetails["ca_cert"] = CACert
-		connectionDetails["insecure_tls"] = true
+	if err := setupCertificates(&connectionDetails); err != nil {
+		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -619,16 +583,8 @@ func testRedisDBCreateUser_DefaultRule(t *testing.T, address string, port int) {
 		"sentinel_password":    sentinelPassword,
 	}
 
-	if redisTls {
-		CACertFile := os.Getenv("CA_CERT_FILE")
-		CACert, err := os.ReadFile(CACertFile)
-		if err != nil {
-			t.Fatal(fmt.Errorf("unable to read CA_CERT_FILE at %v: %w", CACertFile, err))
-		}
-
-		connectionDetails["tls"] = true
-		connectionDetails["ca_cert"] = CACert
-		connectionDetails["insecure_tls"] = true
+	if err := setupCertificates(&connectionDetails); err != nil {
+		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -713,16 +669,8 @@ func testRedisDBCreateUser_plusRole(t *testing.T, address string, port int) {
 		"sentinel_password":    sentinelPassword,
 	}
 
-	if redisTls {
-		CACertFile := os.Getenv("CA_CERT_FILE")
-		CACert, err := os.ReadFile(CACertFile)
-		if err != nil {
-			t.Fatal(fmt.Errorf("unable to read CA_CERT_FILE at %v: %w", CACertFile, err))
-		}
-
-		connectionDetails["tls"] = true
-		connectionDetails["ca_cert"] = CACert
-		connectionDetails["insecure_tls"] = true
+	if err := setupCertificates(&connectionDetails); err != nil {
+		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -795,16 +743,8 @@ func testRedisDBCreateUser_groupOnly(t *testing.T, address string, port int) {
 		"sentinel_password":    sentinelPassword,
 	}
 
-	if redisTls {
-		CACertFile := os.Getenv("CA_CERT_FILE")
-		CACert, err := os.ReadFile(CACertFile)
-		if err != nil {
-			t.Fatal(fmt.Errorf("unable to read CA_CERT_FILE at %v: %w", CACertFile, err))
-		}
-
-		connectionDetails["tls"] = true
-		connectionDetails["ca_cert"] = CACert
-		connectionDetails["insecure_tls"] = true
+	if err := setupCertificates(&connectionDetails); err != nil {
+		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -882,16 +822,8 @@ func testRedisDBCreateUser_roleAndSelector(t *testing.T, address string, port in
 		"sentinel_password":    sentinelPassword,
 	}
 
-	if redisTls {
-		CACertFile := os.Getenv("CA_CERT_FILE")
-		CACert, err := os.ReadFile(CACertFile)
-		if err != nil {
-			t.Fatal(fmt.Errorf("unable to read CA_CERT_FILE at %v: %w", CACertFile, err))
-		}
-
-		connectionDetails["tls"] = true
-		connectionDetails["ca_cert"] = CACert
-		connectionDetails["insecure_tls"] = true
+	if err := setupCertificates(&connectionDetails); err != nil {
+		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -967,16 +899,8 @@ func testRedisDBCreateUser_persistAclFile(t *testing.T, address string, port int
 		"persistence_mode":     "aclfile",
 	}
 
-	if redisTls {
-		CACertFile := os.Getenv("CA_CERT_FILE")
-		CACert, err := os.ReadFile(CACertFile)
-		if err != nil {
-			t.Fatal(fmt.Errorf("unable to read CA_CERT_FILE at %v: %w", CACertFile, err))
-		}
-
-		connectionDetails["tls"] = true
-		connectionDetails["ca_cert"] = CACert
-		connectionDetails["insecure_tls"] = true
+	if err := setupCertificates(&connectionDetails); err != nil {
+		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -1047,16 +971,8 @@ func testRedisDBRotateRootCredentials(t *testing.T, address string, port int) {
 		"sentinel_password":    sentinelPassword,
 	}
 
-	if redisTls {
-		CACertFile := os.Getenv("CA_CERT_FILE")
-		CACert, err := os.ReadFile(CACertFile)
-		if err != nil {
-			t.Fatal(fmt.Errorf("unable to read CA_CERT_FILE at %v: %w", CACertFile, err))
-		}
-
-		connectionDetails["tls"] = true
-		connectionDetails["ca_cert"] = CACert
-		connectionDetails["insecure_tls"] = true
+	if err := setupCertificates(&connectionDetails); err != nil {
+		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -1114,16 +1030,8 @@ func doRedisDBSetCredentials(t *testing.T, username, password, address string, p
 		"sentinel_password":    sentinelPassword,
 	}
 
-	if redisTls {
-		CACertFile := os.Getenv("CA_CERT_FILE")
-		CACert, err := os.ReadFile(CACertFile)
-		if err != nil {
-			t.Fatal(fmt.Errorf("unable to read CA_CERT_FILE at %v: %w", CACertFile, err))
-		}
-
-		connectionDetails["tls"] = true
-		connectionDetails["ca_cert"] = CACert
-		connectionDetails["insecure_tls"] = true
+	if err := setupCertificates(&connectionDetails); err != nil {
+		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -1231,16 +1139,9 @@ func checkPersistenceMode(address string, port int, adminUsername, adminPassword
 		"sentinel_username":    sentinelUsername,
 		"sentinel_password":    sentinelPassword,
 	}
-	if redisTls {
-		CACertFile := os.Getenv("CA_CERT_FILE")
-		CACert, err := os.ReadFile(CACertFile)
-		if err != nil {
-			return fmt.Errorf("unable to read CA_CERT_FILE at %v: %w", CACertFile, err), ""
-		}
 
-		connectionDetails["tls"] = true
-		connectionDetails["ca_cert"] = CACert
-		connectionDetails["insecure_tls"] = true
+	if err := setupCertificates(&connectionDetails); err != nil {
+		return fmt.Errorf("Issue encounted processing X509 inputs: %w", err), ""
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -1335,16 +1236,8 @@ func createUser(address string, port int, adminUsername, adminPassword, username
 		"sentinel_password":    sentinelPassword,
 	}
 
-	if redisTls {
-		CACertFile := os.Getenv("CA_CERT_FILE")
-		CACert, err := os.ReadFile(CACertFile)
-		if err != nil {
-			return fmt.Errorf("unable to read CA_CERT_FILE at %v: %w", CACertFile, err)
-		}
-
-		connectionDetails["tls"] = true
-		connectionDetails["ca_cert"] = CACert
-		connectionDetails["insecure_tls"] = true
+	if err := setupCertificates(&connectionDetails); err != nil {
+		return fmt.Errorf("Issue encounted processing X509 inputs: %w", err)
 	}
 
 	initReq := dbplugin.InitializeRequest{
@@ -1399,6 +1292,47 @@ func createUser(address string, port int, adminUsername, adminPassword, username
 			}
 		}
 	}
+
+	return nil
+}
+
+func setupCertificates(connectionDetails *map[string]interface{}) (err error) {
+	if !redisTls {
+		return nil
+	}
+
+	var TLSCert, TLSKey []byte
+
+	CACertFile := os.Getenv("CA_CERT_FILE")
+	CACert, err := os.ReadFile(CACertFile)
+	if err != nil {
+		return fmt.Errorf("unable to read CA_CERT_FILE at %v: %w", CACertFile, err)
+	}
+
+	TLSCertFile := os.Getenv("TLS_CERT_FILE")
+	if TLSCertFile != "" {
+		TLSCert, err = os.ReadFile(TLSCertFile)
+		if err != nil {
+			return fmt.Errorf("unable to read TLS_CERT_FILE at %v: %w", TLSCertFile, err)
+		}
+	}
+	TLSKeyFile := os.Getenv("TLS_KEY_FILE")
+	if TLSKeyFile != "" {
+		TLSKey, err = os.ReadFile(TLSKeyFile)
+		if err != nil {
+			return fmt.Errorf("unable to read TLS_KEY_FILE at %v: %w", TLSKeyFile, err)
+		}
+	}
+
+	if (len(TLSCert) != 0 && len(TLSKey) == 0) ||
+		(len(TLSCert) == 0 && len(TLSKey) != 0) {
+		return fmt.Errorf("For mutual TLS both tls_cert and tls_key parameter must be set")
+	}
+	(*connectionDetails)["tls"] = true
+	(*connectionDetails)["ca_cert"] = CACert
+	(*connectionDetails)["insecure_tls"] = false
+	(*connectionDetails)["tls_cert"] = TLSCert
+	(*connectionDetails)["tls_key"] = TLSKey
 
 	return nil
 }
