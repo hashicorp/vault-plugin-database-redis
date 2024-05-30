@@ -7,18 +7,20 @@ This project uses the database plugin interface introduced in Vault version 0.7.
 The plugin supports the generation of static and dynamic user roles and root credential rotation on the following Redis installations...
 
 - Single primary server
-- Primary server and 1 - N secondary (readonly) servers
+- Primary server and 1 - N secondary (readonly) replica servers
 - Redis Cluster
 - Redis Sentinel
 
-The plugin can also be configured to persist the generated credentials either to the servers local ACL file should one be configured or to the Redis configuration file with the `CONFIG REWRITE` command.
+The plugin can also be configured to persist the generated credentials using the `presistence_mode` parameter, either to the servers local ACL file, using the `ACL SAVE` commond or to the Redis configuration file with the `CONFIG REWRITE` command. The REDIS installation must have either the `aclsave` file configured or a writable config file for this to work.
+
+In addition the plugin has been upgraded to support X509 certificate authentication as by default, Redis uses mutual TLS and requires clients to authenticate with a valid certificate (authenticated against trusted root CAs. It is necessary to set the Redis setting `tls-auth-clients no` to disable client authentication.
 
 ## Build
 
 Use `make dev` to build a development version of this plugin.
 
 **Please note:** In case of the following errors, while creating Redis connection in Vault, please build this plugin with `CGO_ENABLED=0 go build -ldflags='-extldflags=-static' -o vault-plugin-database-redis ./cmd/vault-plugin-database-redis/` command. More details on this error can be found [here](https://github.com/hashicorp/vault-plugin-database-redis/issues/1#issuecomment-1078415041).
-````bash
+```bash
 Error writing data to database/config/my-redis: Error making API request.
 
 URL: PUT http://127.0.0.1:8200/v1/database/config/my-redis
@@ -27,12 +29,17 @@ Code: 400. Errors:
 * error creating database object: invalid database version: 2 errors occurred:
         * fork/exec /config/plugin/vault-plugin-database-redis: no such file or directory
         * fork/exec /config/plugin/vault-plugin-database-redis: no such file or directory
-````
+```
 
 ## Testing
-To run tests, `go test` will first set up the docker.io/redis:latest database image, then execute a set of basic tests against it. To test against different redis images, for example 5.0-buster, set the environment variable `REDIS_VERSION=5.0-buster`. If you want to run the tests against a local redis installation or an already running redis container, set the environment variable `TEST_REDIS_HOST` before executing. 
+To run tests, `go test` will first set up the docker.io/redis:latest database image, then execute a set of basic tests against it. To test against different redis images, for example 5.0-buster, set the environment variable `REDIS_VERSION=5.0-buster`. If you want to run the tests against a local redis installation or an already running redis containerized installation, set the appropriate environment variables before executing.
 
-**Note:** The tests assume that the redis database instance has a default user with the following ACL settings `user default on >default-pa55w0rd ~* +@all`. If it doesn't, you will need to align the Administrator username and password with the pre-set values in the `redis_test.go` file.
+- `TEST_REDIS_PRIMARY_HOST` and `TEST_REDIS_PRIMARY_PORT` for a standalone server.
+- `TEST_REDIS_PRIMARY_HOST`, `TEST_REDIS_PRIMARY_PORT` and `TEST_REDIS_SECONDARIES` for a server with primary and N secondary's.
+- `TEST_REDIS_CLUSTER` for a Redis cluster installation. **Note:** One server and port combination is enought for testing an the plugin will be able to fetch the clusters topography.
+- `TEST_REDIS_SENTINELS` and TEST_REDIS_SENTINEL_MASTER_NAME` for a sentinel installation.
+
+**Note:** The tests assume that the redis database installation has a default user with the following ACL settings `user default on >default-pa55w0rd ~* +@all`. If it doesn't, you will need to align the Administrator username and password with the pre-set values in the `redis_test.go` file.
 
 Set `VAULT_ACC=1` to execute all of the tests including the acceptance tests, or run just a subset of tests by using a command like `go test -run TestDriver/Init` for example.
 
@@ -74,7 +81,7 @@ Prior to initializing the plugin, ensure that you have created an administration
 
 ```bash
 $ vault write database/config/my-redis plugin_name="vault-plugin-database-redis" \
-        host="localhost" port=6379 username="Administrator" password="password" \
+        primary_host="localhost" primary_port=6379 username="Administrator" password="password" \
         allowed_roles="my-redis-*-role"
 
 # You should consider rotating the admin password. Note that if you do, the new password will never be made available
@@ -83,35 +90,71 @@ $ vault write -force database/rotate-root/my-redis
  ```
 #### Primary REDIS Server and read only secondary replicas.
 
+```bash
+
+CACERT=$(cat $CA_CERT_FILE)
+TLSCert=$(cat $TLS_CERT_FILE)
+TLSKey=$(cat $TLS_KEY_FILE)
+
+vault write database/config/my-redis plugin_name="vault-plugin-database-redis" \
+      primary_host="master-server" primary_port="6379" \
+      secondaries="redis-secondary-0:6379,redis-secondary-1:6379," \
+      username="default" password="default-pa55w0rd" \
+      allowed_roles="*" persistence_mode="REWRITE" \
+      tls=true ca_cert="$CACERT" tls_cert="$TLSCert" tls_key="$TLSKey"
+#Success! Data written to: database/config/my-redis
+```
+
 #### REDIS Cluster.
 
 ```bash
 vault write database/config/my-redis plugin_name="vault-plugin-database-redis" \
-       cluster="localhost:7001" \
-       username=default password=user-pa55w0rd \
-       allowed_roles="*" persistence_mode="REWRITE"
+      cluster="node-0:6379,node-1:6379,node-3:6379,node-4:6379" \
+      username=default password=default-pa55w0rd \
+      allowed_roles="*" persistence_mode="REWRITE"
+#Success! Data written to: database/config/my-redis
 ```
+
 #### REDIS Sentinel.
 
 ```bash
+
+CACERT=$(cat $CA_CERT_FILE)
+TLSCert=$(cat $TLS_CERT_FILE)
+TLSKey=$(cat $TLS_KEY_FILE)
+
 vault write database/config/my-redis plugin_name="vault-plugin-database-redis" \
       sentinels="172.27.0.6:26379,172.27.0.7:26379,172.27.0.5" sentinel_master_name=dear_racer \
+      sentinel_username="default" sentinel_password="default-pa55w0rd" \
       username=default password=default-pa55w0rd 'allowed_roles=*' \
-      persistence_mode=ACLFILE
+      persistence_mode=ACLFILE \
+      tls=true ca_cert="$CACERT" tls_cert="$TLSCert" tls_key="$TLSKey" 
 #Success! Data written to: database/config/my-redis
- ```
+```
+
 ### Dynamic Role Creation
 
 When you create roles, you need to provide a JSON string containing the Redis ACL rules which are documented [here](https://redis.io/commands/acl-cat) or in the output of the `ACL CAT` redis command.
 
 ```bash
-# if a creation_statement is not provided the user account will default to a read only user, '["~*", "+@read"]' that can read any key.
+# if a creation_statement is not provided the user account will default to a read only user, '["~*", "+@read"]' that can read any key. 
 $ vault write database/roles/my-redis-admin-role db_name=my-redis \
         default_ttl="5m" max_ttl="1h" creation_statements='["+@admin"]'
 
 $ vault write database/roles/my-redis-read-foo-role db_name=my-redis \
         default_ttl="5m" max_ttl="1h" creation_statements='["~foo", "+@read"]'
 Success! Data written to: database/roles/my-redis-read-foo-role
+```
+
+**Note:** Starting from Redis 7.0, ACL rules can also be grouped into multiple distinct sets of rules, called selectors. Selectors are added by wrapping the rules in parentheses and providing them just like any other rule. In order to execute a command, either the root permissions (rules defined outside of parenthesis) or any of the selectors (rules defined inside parenthesis) must match the given command. For example:
+
+`ACL SETUSER virginia on +GET allkeys (+SET ~app1*)`
+
+This sets a user with two sets of permissions, one defined on the user and one defined with a selector. The root user permissions only allow executing the get command, but can be executed on any keys. The selector then grants a secondary set of permissions: access to the SET command to be executed on any key that starts with app1. Using multiple selectors allows you to grant permissions that are different depending on what keys are being accessed.
+
+```bash
+vault write database/roles/selector-role db_name=my-redis default_ttl="5m" max_ttl="1h" \
+      creation_statements='["~foo*", "+get", "(~bar* +get +set)"]'
 ```
 
 To retrieve the credentials for the dynamic accounts
@@ -135,6 +178,15 @@ lease_duration     5m
 lease_renewable    true
 password           ZN6gdTKszk7oc9Oztc-o
 username           V_TOKEN_MY-REDIS-READ-FOO-ROLE_PUAINND1FC5XQGRC0HIF_1608481734
+
+$ vault read database/creds/selector-role
+Key                Value
+---                -----
+lease_id           database/creds/selector-role/7NltInpVSc7lPTtybJbkT0Dn
+lease_duration     5m
+lease_renewable    true
+password           -65RFBsvOCkWCfBwFIMN
+username           V_TOKEN_SELECTOR-ROLE_W2ZYZDCXFKNWS7N43WMV_1717101832
 
 ```
 
@@ -206,11 +258,13 @@ A set of make targets are provided for quick and easy iterations when developing
 server running locally and accessible via the `vault` CLI. See this [documentation](https://github.com/hashicorp/vault#developing-vault) 
 on how to get started with Vault.
 
-1. `make setup-env` will start a Redis docker container and initialize a test user with the username `us3rn4m3` and passwod `user-pa55w0rd`
-2. `source ./bootstrap/terraform/local_environment_setup.sh` will export the necessary environment variables generated from the setup step
+1. `make setup-(env|cluster|sentinel|primary-secondary)` will start a Redis docker installation and initialize a test user with the username `us3rn4m3` and passwod `user-pa55w0rd` or user `default` and password `default-pa55w0rd`. The cluster, sentinel and primary-secondary installations use docker bridge networking and will only work on Linux servers . 
+2. `source ./bootstrap/terraform/local_environment_setup.sh` will export the necessary environment variables generated from the setup step. For the cluster, sentinel and primary-secondary installations, source the export-(cluster|sentinel|primary-secondary)-vars.sh file
 3. `make configure` will build the plugin, register it in your local Vault server and run sample commands to verify everything is working
 4. `make testacc` will run the acceptance tests against the Redis container created during the environment setup
-5. `make teardown-env` will stop the Redis docker container with any resources generated alongside it such as network configs
+5. `make teardown-(env|cluster|sentinel|primary-secondry)` will stop the Redis docker installation with any resources generated alongside it such as network configs
 
 When iterating, you can reload any local code changes with `make configure` as many times as desired to test the latest 
 modifications via the Vault CLI or API.
+
+Corresponding fully encrypted test Redis installations are also available, see cluster-tls, sentinel-tls and primary-secondary-tls. Again they use the docker bridge networking with a fixed network subnet address `192.168.200.0/28` this time, so that the Redis server certificate can be generated with a list of actual IP addresses removing the need to test using the `insecure_tls=true` in the tests.
