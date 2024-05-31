@@ -5,6 +5,7 @@ pkg/*
 bin/*
 
 bootstrap/terraform/local_environment_setup.sh
+bootstrap/*/data
 scripts/tests/tls
 **/.terraform*
 **/terraform.tfstate*

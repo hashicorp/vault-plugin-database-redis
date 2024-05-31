@@ -11,7 +11,7 @@ The plugin supports the generation of static and dynamic user roles and root cre
 - Redis Cluster
 - Redis Sentinel
 
-The plugin can also be configured to persist the generated credentials using the `presistence_mode` parameter, either to the servers local ACL file, using the `ACL SAVE` commond or to the Redis configuration file with the `CONFIG REWRITE` command. The REDIS installation must have either the `aclsave` file configured or a writable config file for this to work.
+The plugin can also be configured to persist the generated credentials using the `presistence_mode` parameter, either to the servers local ACL file, using the `ACL SAVE` commond or to the Redis configuration file with the `CONFIG REWRITE` command. The Redis installation must have either the `aclsave` file configured or a writable config file for this to work.
 
 In addition the plugin has been upgraded to support X509 certificate authentication as by default, Redis uses mutual TLS and requires clients to authenticate with a valid certificate (authenticated against trusted root CAs. It is necessary to set the Redis setting `tls-auth-clients no` to disable client authentication.
 
@@ -77,7 +77,7 @@ Prior to initializing the plugin, ensure that you have created an administration
 
 ### Plugin Initialization
 
-#### Standalone REDIS Server.
+#### Standalone Redis Server.
 
 ```bash
 $ vault write database/config/my-redis plugin_name="vault-plugin-database-redis" \
@@ -88,7 +88,7 @@ $ vault write database/config/my-redis plugin_name="vault-plugin-database-redis"
 # through Vault, so you should create a vault-specific database admin user for this.
 $ vault write -force database/rotate-root/my-redis
  ```
-#### Primary REDIS Server and read only secondary replicas.
+#### Primary Redis Server and read only secondary replicas.
 
 ```bash
 
@@ -105,7 +105,7 @@ vault write database/config/my-redis plugin_name="vault-plugin-database-redis" \
 #Success! Data written to: database/config/my-redis
 ```
 
-#### REDIS Cluster.
+#### Redis Cluster.
 
 ```bash
 vault write database/config/my-redis plugin_name="vault-plugin-database-redis" \
@@ -115,7 +115,7 @@ vault write database/config/my-redis plugin_name="vault-plugin-database-redis" \
 #Success! Data written to: database/config/my-redis
 ```
 
-#### REDIS Sentinel.
+#### Redis Sentinel.
 
 ```bash
 
@@ -131,6 +131,8 @@ vault write database/config/my-redis plugin_name="vault-plugin-database-redis" \
       tls=true ca_cert="$CACERT" tls_cert="$TLSCert" tls_key="$TLSKey" 
 #Success! Data written to: database/config/my-redis
 ```
+
+**Note:** A sentinel installation requires credentials for the primary and secondaries as well as credentials for the sentinel servers. In this example they are the same but best practice would be to have a sentinel user with minimal control permissions. For example: `ACL SETUSER sentinel-user ON >somepassword allchannels +multi +slaveof +ping +exec +subscribe +config|rewrite +role +publish +info +client|setname +client|kill +script|kill`. Also **note:** the plugin provisions credentials to the Redis servers the sentinels manage at this time, not to the sentinels themselves.
 
 ### Dynamic Role Creation
 
