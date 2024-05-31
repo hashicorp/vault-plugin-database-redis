@@ -5,8 +5,6 @@ package redis
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"net"
 	"strconv"
@@ -99,8 +97,6 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 		}
 	}
 
-	// ??c.Connected = false
-
 	if len(c.Persistence) != 0 {
 		c.Persistence = strings.ToUpper(c.Persistence)
 		if c.Persistence != "REWRITE" && "ACLFILE" != c.Persistence {
@@ -139,40 +135,13 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (interface{}
 	var poolConfig radix.PoolConfig
 	var clusterConfig radix.ClusterConfig
 
-	if c.TLS {
-		rootCAs := x509.NewCertPool()
-		ok := rootCAs.AppendCertsFromPEM([]byte(c.CACert))
-		if !ok {
-			return nil, fmt.Errorf("failed to parse root certificate")
-		}
-		// Mutual TLS required (client cert)
-		var cert tls.Certificate
-		if len(c.TLSCert) != 0 {
-			cert, err = tls.X509KeyPair([]byte(c.TLSCert), []byte(c.TLSKey))
-			if err != nil {
-				return nil, fmt.Errorf("failed to create key pair from tls_cert and tls_key parameters: %w", err)
-			}
-		}
-		poolConfig = radix.PoolConfig{
-			Dialer: radix.Dialer{
-				AuthUser: c.Username,
-				AuthPass: c.Password,
-				NetDialer: &tls.Dialer{
-					Config: &tls.Config{
-						RootCAs:            rootCAs,
-						Certificates:       []tls.Certificate{cert},
-						InsecureSkipVerify: c.InsecureTLS,
-					},
-				},
-			},
-		}
-	} else {
-		poolConfig = radix.PoolConfig{
-			Dialer: radix.Dialer{
-				AuthUser: c.Username,
-				AuthPass: c.Password,
-			},
-		}
+	dialer, err := c.GetDialer(c.Username, c.Password)
+	if err != nil {
+		return nil, err
+	}
+
+	poolConfig = radix.PoolConfig{
+		Dialer: dialer,
 	}
 
 	if len(c.Cluster) != 0 {
@@ -244,40 +213,4 @@ func (c *redisDBConnectionProducer) Close() error {
 	defer c.Unlock()
 
 	return c.close()
-}
-
-// Get a Dialer
-func (c *redisDBConnectionProducer) GetDialer(username, password string) (dialer radix.Dialer, err error) {
-	if c.TLS {
-		rootCAs := x509.NewCertPool()
-		ok := rootCAs.AppendCertsFromPEM([]byte(c.CACert))
-		if !ok {
-			return radix.Dialer{}, fmt.Errorf("failed to parse root certificate")
-		}
-		// Mutual TLS required (client cert)
-		var cert tls.Certificate
-		if len(c.TLSCert) != 0 {
-			cert, err = tls.X509KeyPair([]byte(c.TLSCert), []byte(c.TLSKey))
-			if err != nil {
-				return radix.Dialer{}, fmt.Errorf("failed to create key pair from tls_cert and tls_key parameters: %w", err)
-			}
-		}
-		dialer = radix.Dialer{
-			AuthUser: username,
-			AuthPass: password,
-			NetDialer: &tls.Dialer{
-				Config: &tls.Config{
-					RootCAs:            rootCAs,
-					Certificates:       []tls.Certificate{cert},
-					InsecureSkipVerify: c.InsecureTLS,
-				},
-			},
-		}
-	} else {
-		dialer = radix.Dialer{
-			AuthUser: username,
-			AuthPass: password,
-		}
-	}
-	return dialer, nil
 }

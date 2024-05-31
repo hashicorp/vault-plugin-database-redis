@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"crypto/tls"
+	"crypto/x509"
 
 	"github.com/hashicorp/errwrap"
 	hclog "github.com/hashicorp/go-hclog"
@@ -159,11 +161,10 @@ func (c *RedisDB) DeleteUser(ctx context.Context, req dbplugin.DeleteUserRequest
 
 func newUser(ctx context.Context, db radix.MultiClient, username, mode string, req dbplugin.NewUserRequest) error {
 	statements := removeEmpty(req.Statements.Commands)
-	fmt.Printf("%#v\n", statements)
+
 	if len(statements) == 0 {
 		statements = append(statements, defaultRedisUserRule)
 	}
-	fmt.Printf("%#v\n", statements)
 
 	// setup REDIS command
 	aclargs := []string{"SETUSER", username, "ON", ">" + req.Password}
@@ -173,7 +174,6 @@ func newUser(ctx context.Context, db radix.MultiClient, username, mode string, r
 	if err != nil {
 		return errwrap.Wrapf("error unmarshalling REDIS rules in the creation statement JSON: {{err}}", err)
 	}
-	fmt.Printf("args: %#v\n", args)
 
 	// append the additional rules/permissions
 	aclargs = append(aclargs, args...)
@@ -267,11 +267,11 @@ func (c *RedisDB) changeUserPassword(ctx context.Context, username, password str
 			}
 
 			if err != nil {
-				return fmt.Errorf("reset of passwords for user %s failed in changeUserPassword on cluster member %s: %w", username, node, err)
+				return fmt.Errorf("reset of passwords for user %s failed in changeUserPassword on %s node %s: %w", username, connType, node, err)
 			}
 
 			if mn.Null {
-				return fmt.Errorf("changeUserPassword for user %s failed on cluster member %s, user not found!", node, username)
+				return fmt.Errorf("changeUserPassword for user %s failed on %s node, %s, user not found!", username, connType, node)
 			}
 		}
 	}
@@ -350,6 +350,42 @@ func (c *RedisDB) Type() (string, error) {
 
 func (c *RedisDB) Close() error {
 	return nil
+}
+
+// Get a Dialer
+func (c *redisDBConnectionProducer) GetDialer(username, password string) (dialer radix.Dialer, err error) {
+	if c.TLS {
+		rootCAs := x509.NewCertPool()
+		ok := rootCAs.AppendCertsFromPEM([]byte(c.CACert))
+		if !ok {
+			return radix.Dialer{}, fmt.Errorf("failed to parse root certificate")
+		}
+		// Mutual TLS required (client cert)
+		var cert tls.Certificate
+		if len(c.TLSCert) != 0 {
+			cert, err = tls.X509KeyPair([]byte(c.TLSCert), []byte(c.TLSKey))
+			if err != nil {
+				return radix.Dialer{}, fmt.Errorf("failed to create key pair from tls_cert and tls_key parameters: %w", err)
+			}
+		}
+		dialer = radix.Dialer{
+			AuthUser: username,
+			AuthPass: password,
+			NetDialer: &tls.Dialer{
+				Config: &tls.Config{
+					RootCAs:            rootCAs,
+					Certificates:       []tls.Certificate{cert},
+					InsecureSkipVerify: c.InsecureTLS,
+				},
+			},
+		}
+	} else {
+		dialer = radix.Dialer{
+			AuthUser: username,
+			AuthPass: password,
+		}
+	}
+	return dialer, nil
 }
 
 func persistChange(ctx context.Context, client radix.Client, pmode string) error {

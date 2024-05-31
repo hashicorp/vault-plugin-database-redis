@@ -37,7 +37,7 @@ To run tests, `go test` will first set up the docker.io/redis:latest database im
 - `TEST_REDIS_PRIMARY_HOST` and `TEST_REDIS_PRIMARY_PORT` for a standalone server.
 - `TEST_REDIS_PRIMARY_HOST`, `TEST_REDIS_PRIMARY_PORT` and `TEST_REDIS_SECONDARIES` for a server with primary and N secondary's.
 - `TEST_REDIS_CLUSTER` for a Redis cluster installation. **Note:** One server and port combination is enought for testing an the plugin will be able to fetch the clusters topography.
-- `TEST_REDIS_SENTINELS` and TEST_REDIS_SENTINEL_MASTER_NAME` for a sentinel installation.
+- `TEST_REDIS_SENTINELS` and `TEST_REDIS_SENTINEL_MASTER_NAME` for a sentinel installation.
 
 **Note:** The tests assume that the redis database installation has a default user with the following ACL settings `user default on >default-pa55w0rd ~* +@all`. If it doesn't, you will need to align the Administrator username and password with the pre-set values in the `redis_test.go` file.
 
@@ -124,7 +124,7 @@ TLSCert=$(cat $TLS_CERT_FILE)
 TLSKey=$(cat $TLS_KEY_FILE)
 
 vault write database/config/my-redis plugin_name="vault-plugin-database-redis" \
-      sentinels="172.27.0.6:26379,172.27.0.7:26379,172.27.0.5" sentinel_master_name=dear_racer \
+      sentinels="172.27.0.6:26379,172.27.0.7:26379,172.27.0.5:26379" sentinel_master_name=dear_racer \
       sentinel_username="default" sentinel_password="default-pa55w0rd" \
       username=default password=default-pa55w0rd 'allowed_roles=*' \
       persistence_mode=ACLFILE \

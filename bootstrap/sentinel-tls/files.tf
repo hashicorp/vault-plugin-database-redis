@@ -15,7 +15,8 @@ tls-port $SENTINEL_PORT
 tls-cert-file /tmp/data/tls.crt
 tls-key-file /tmp/data/tls.key
 tls-ca-cert-file /tmp/data/ca.crt
-tls-auth-clients no
+#tls-auth-clients no
+tls-replication yes
 sentinel monitor $MASTER_NAME $${MASTER_IP%% *} 6379 2
 sentinel down-after-milliseconds $MASTER_NAME 50000
 sentinel failover-timeout $MASTER_NAME 60000
@@ -58,7 +59,8 @@ tls-port 6379
 tls-cert-file /tmp/data/tls.crt
 tls-key-file /tmp/data/tls.key
 tls-ca-cert-file /tmp/data/ca.crt
-tls-auth-clients no
+#tls-auth-clients no
+tls-replication yes
 appendonly yes
 loglevel debug
 requirepass default-pa55w0rd 
