@@ -706,6 +706,7 @@ func testRedisDBCreateUser_plusRole(t *testing.T, address string, port int) {
 		t.Fatalf("Could not revoke user: %s", userResp.Username)
 	}
 }
+
 /* [TODO] groupOnly hang over from Couchbase */
 func testRedisDBCreateUser_groupOnly(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {
@@ -855,6 +856,7 @@ func testRedisDBCreateUser_roleAndSelector(t *testing.T, address string, port in
 		t.Fatalf("Could not revoke user: %s", userResp.Username)
 	}
 }
+
 /* [TODO] change to test SAVE ACLFILE if supported.*/
 func testRedisDBCreateUser_persistAclFile(t *testing.T, address string, port int) {
 	if os.Getenv("VAULT_ACC") == "" {

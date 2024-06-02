@@ -1,6 +1,6 @@
 
 resource "local_file" "redis-sh" {
-  content = <<-EOT
+  content  = <<-EOT
 FLAG=$1
 MASTER=$2
 MASTER_PORT=$3
@@ -9,7 +9,17 @@ CONF_FILE="/tmp/redis.conf"
 ACL_FILE="/tmp/users.acl"
 
 # generate redis.conf file
+%{if var.use-tls == false}
 echo "port 6379
+%{else}
+echo "port 0
+tls-port 6379
+tls-cert-file /tmp/data/tls.crt
+tls-key-file /tmp/data/tls.key
+tls-ca-cert-file /tmp/data/ca.crt
+#tls-auth-clients no
+tls-replication yes
+%{endif}
 appendonly yes
 loglevel debug
 requirepass default-pa55w0rd 

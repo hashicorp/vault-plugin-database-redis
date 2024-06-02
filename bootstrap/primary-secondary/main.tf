@@ -11,7 +11,7 @@ resource "docker_container" "redis-master" {
   hostname     = "redis-master"
   network_mode = "bridge"
   command      = ["/tmp/data/redis.sh"]
-  logs = true
+  logs         = true
 
   volumes {
     host_path      = "${path.cwd}/data"
@@ -43,6 +43,15 @@ resource "docker_container" "redis-replica" {
 }
 
 resource "docker_network" "private_network" {
-  name = "prim-sec-network"
+  name         = "prim-sec-network"
+  ipam_driver  = "default"
+  ipam_options = {}
+  ipv6         = false
+  options      = {}
+
+  ipam_config {
+    aux_address = {}
+    subnet      = "192.168.200.0/28"
+  }
 }
 

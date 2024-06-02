@@ -1,6 +1,6 @@
 
-resource "local_file" "redis-sh"{
-  content = <<-EOT
+resource "local_file" "redis-sh" {
+  content  = <<-EOT
 ANNOUNCE_IP=$1
 ANNOUNCE_PORT=$(expr $2)
 ANNOUNCE_BUS_PORT=$(expr $ANNOUNCE_PORT + 100)
@@ -9,7 +9,17 @@ CONF_FILE="/tmp/redis.conf"
 ACL_FILE="/tmp/users.acl"
 
 # generate redis.conf file
+%{if var.use-tls == false}
 echo "port 6379
+%{else}
+echo "port 0
+tls-port 6379
+#tls-auth-clients no
+tls-cluster yes
+tls-cert-file /tmp/data/tls.crt
+tls-key-file /tmp/data/tls.key
+tls-ca-cert-file /tmp/data/ca.crt
+%{endif}
 cluster-enabled yes
 cluster-config-file nodes.conf
 cluster-node-timeout 5000

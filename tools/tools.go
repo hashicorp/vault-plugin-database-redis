@@ -17,6 +17,6 @@ package tools
 //go:generate go install mvdan.cc/gofumpt
 //go:generate go install github.com/itchyny/gojq/cmd/gojq
 import (
-	_ "mvdan.cc/gofumpt"
 	_ "github.com/itchyny/gojq"
+	_ "mvdan.cc/gofumpt"
 )

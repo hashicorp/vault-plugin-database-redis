@@ -29,11 +29,15 @@ resource "docker_container" "redis-cluster-creator" {
   image        = docker_image.redis.image_id
   name         = "redis-cluster-creator"
   network_mode = "bridge"
-  command      = ["redis-cli", "-a", "default-pa55w0rd", "--cluster", "create", "redis-node-0:6379", "redis-node-1:6379", "redis-node-2:6379", "redis-node-3:6379", "redis-node-4:6379", "redis-node-5:6379", "--cluster-replicas", "1", "--cluster-yes"]
+  command      = var.use-tls == true ? var.redis-tls-cluster-command : var.redis-cluster-command
   logs         = true
   networks_advanced {
     name    = docker_network.private_network.name
     aliases = ["redis-cluster-creator"]
+  }
+  volumes {
+    host_path      = "${path.cwd}/data"
+    container_path = "/tmp/data"
   }
   depends_on = [
     docker_container.redis-nodes
@@ -41,5 +45,14 @@ resource "docker_container" "redis-cluster-creator" {
 }
 
 resource "docker_network" "private_network" {
-  name = "redis-cluster-network"
+  name         = "redis-cluster-network"
+  ipam_driver  = "default"
+  ipam_options = {}
+  ipv6         = false
+  options      = {}
+
+  ipam_config {
+    aux_address = {}
+    subnet      = "192.168.200.0/28"
+  }
 }
