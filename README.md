@@ -260,7 +260,7 @@ A set of make targets are provided for quick and easy iterations when developing
 server running locally and accessible via the `vault` CLI. See this [documentation](https://github.com/hashicorp/vault#developing-vault) 
 on how to get started with Vault.
 
-1. `make setup-(env|cluster|sentinel|primary-secondary)` will start a Redis docker installation and initialize a test user with the username `us3rn4m3` and passwod `user-pa55w0rd` or user `default` and password `default-pa55w0rd`. The cluster, sentinel and primary-secondary installations use docker bridge networking and will only work on Linux servers . 
+1. `make setup-(env|cluster|sentinel|primary-secondary)` will start a Redis docker installation and initialize a test user with the username `us3rn4m3` and passwod `user-pa55w0rd` or user `default` and password `default-pa55w0rd`. The cluster, sentinel and primary-secondary installations use docker bridge networking and will only work on Linux servers. They default to fully encrypted with mutual TLS enabled. To run then in plain text mode, pass the `-var=use-tls=false` flag on the `terraform apply` command line. 
 2. `source ./bootstrap/terraform/local_environment_setup.sh` will export the necessary environment variables generated from the setup step. For the cluster, sentinel and primary-secondary installations, source the export-(cluster|sentinel|primary-secondary)-vars.sh file
 3. `make configure` will build the plugin, register it in your local Vault server and run sample commands to verify everything is working
 4. `make testacc` will run the acceptance tests against the Redis container created during the environment setup
@@ -269,4 +269,4 @@ on how to get started with Vault.
 When iterating, you can reload any local code changes with `make configure` as many times as desired to test the latest 
 modifications via the Vault CLI or API.
 
-Corresponding fully encrypted test Redis installations are also available, see cluster-tls, sentinel-tls and primary-secondary-tls. Again they use the docker bridge networking with a fixed network subnet address `192.168.200.0/28` this time, so that the Redis server certificate can be generated with a list of actual IP addresses removing the need to test using the `insecure_tls=true` in the tests.
+**Note:** The docker bridge networking works with a fixed network subnet address of `192.168.200.0/28`. This means that the terraform generated Redis server certificate can be generated with a list of actual IP addresses removing the need to test using the `insecure_tls=true` in the tests.
