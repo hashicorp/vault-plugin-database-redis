@@ -343,16 +343,14 @@ func (c *redisDBConnectionProducer) GetDialer(username, password string) (dialer
 }
 
 func checkPersistence(ctx context.Context, client radix.MultiClient) error {
-
 	var replicaSets map[string]radix.ReplicaSet
 	var connType string
 
 	connType, replicaSets, err := getReplicaSets(client)
-
 	if err != nil {
 		return fmt.Errorf("retrieving %s clients failed error: %w", connType, err)
 	}
-	
+
 	var response []string
 	mb := radix.Maybe{Rcv: &response}
 
@@ -416,7 +414,7 @@ func getReplicaSets(client radix.MultiClient) (connType string, replicaSets map[
 		connType = "Cluster"
 
 	default:
-		err = fmt.Errorf("Unsupported client type passed to getReplicaSets") 
+		err = fmt.Errorf("Unsupported client type passed to getReplicaSets")
 	}
 	return connType, replicaSets, err
 }

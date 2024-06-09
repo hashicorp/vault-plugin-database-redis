@@ -322,7 +322,7 @@ func testRedisDBInitialize_persistence(t *testing.T, host string, port int) {
 	if persistence_mode == "None" && err == nil {
 		t.Fatalf("Testing Init() with persistence_node detected as \"None\" should have failed but did not.")
 	}
-	
+
 	if err != nil && persistence_mode == "ACLFILE" {
 		t.Fatalf("Testing Init() with perstence_mode aclfile failed: %s", err)
 	}
@@ -1147,15 +1147,14 @@ func checkPersistenceMode(address string, port int, adminUsername, adminPassword
 	ctx, _ := context.WithTimeout(context.Background(), 5000*time.Millisecond)
 
 	client, err := db.getConnection(ctx)
-
 	if err != nil {
 		return err, ""
 	}
 
 	err = checkPersistence(ctx, client.(radix.MultiClient))
-	
+
 	db.Close()
-	
+
 	if err == nil {
 		return nil, "ACLFILE"
 	}
