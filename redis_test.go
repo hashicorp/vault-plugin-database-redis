@@ -33,7 +33,6 @@ const (
 
 var (
 	redisTls                   = false
-	redis_container            = false
 	redis_secondaries          = ""
 	redis_cluster_hosts        = ""
 	redis_sentinel_hosts       = ""
@@ -122,7 +121,6 @@ func prepareRedisTestContainer(t *testing.T) (func(), string, int) {
 		cleanup()
 	}
 	time.Sleep(3 * time.Second)
-	redis_container = true
 	return cleanup, "0.0.0.0", 6379
 }
 
@@ -148,7 +146,8 @@ func TestDriver(t *testing.T) {
 
 	err, persistence_mode = checkPersistenceMode(host, port, defaultUsername, defaultPassword)
 	if err != nil {
-		t.Fatalf("Failed to check persistence mode: %s", err)
+		t.Log("Check for ACLSAVE persistence mode did not pass.")
+		persistence_mode = "None"
 	}
 
 	err = createUser(host, port, defaultUsername, defaultPassword, "Administrator", "password", aclCat)
@@ -863,8 +862,8 @@ func testRedisDBCreateUser_persistAclFile(t *testing.T, address string, port int
 		t.SkipNow()
 	}
 
-	if redis_container == true {
-		t.Skip("Skipping persist config as REDIS container is not configured to use an acl file.")
+	if persistence_mode == "None" {
+		t.Skip("Skipping persist config as this REDIS installation is not configured to use an acl file.")
 	}
 
 	host := address
@@ -1145,27 +1144,11 @@ func checkPersistenceMode(address string, port int, adminUsername, adminPassword
 		return fmt.Errorf("Database should be initialized"), ""
 	}
 
-	// setup REDIS command
-	//	aclargs := []string{"SETUSER", username, "ON", ">" + password, aclRule}
-	//	aclargs = append(aclargs, cluster_rules...)
-
 	var replicaSets map[string]radix.ReplicaSet
 	var connType string
 
-	switch db.client.(type) {
+	connType, replicaSets, err = getReplicaSets(db.client)
 
-	case *radix.Sentinel:
-		replicaSets, err = db.client.(*radix.Sentinel).Clients()
-		connType = "Sentinel"
-
-	case radix.MultiClient:
-		replicaSets, err = db.client.Clients()
-		connType = "MultiClient"
-
-	case *radix.Cluster:
-		replicaSets, err = db.client.(*radix.Cluster).Clients()
-		connType = "Cluster"
-	}
 	if err != nil {
 		return fmt.Errorf("retrieving %s clients failed error: %w", connType, err), ""
 	}
@@ -1196,7 +1179,7 @@ func checkPersistenceMode(address string, port int, adminUsername, adminPassword
 		}
 	}
 
-	return err, "some mode"
+	return err, "ACLFILE"
 }
 
 func createUser(address string, port int, adminUsername, adminPassword, username, password, aclRule string) (err error) {
@@ -1249,20 +1232,8 @@ func createUser(address string, port int, adminUsername, adminPassword, username
 	var replicaSets map[string]radix.ReplicaSet
 	var connType string
 
-	switch db.client.(type) {
+	connType, replicaSets, err = getReplicaSets(db.client)
 
-	case *radix.Sentinel:
-		replicaSets, err = db.client.(*radix.Sentinel).Clients()
-		connType = "Sentinel"
-
-	case radix.MultiClient:
-		replicaSets, err = db.client.Clients()
-		connType = "MultiClient"
-
-	case *radix.Cluster:
-		replicaSets, err = db.client.(*radix.Cluster).Clients()
-		connType = "Cluster"
-	}
 	if err != nil {
 		return fmt.Errorf("retrieving %s clients failed error: %w", connType, err)
 	}

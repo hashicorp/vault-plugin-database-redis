@@ -126,23 +126,12 @@ func (c *RedisDB) DeleteUser(ctx context.Context, req dbplugin.DeleteUserRequest
 	var replicaSets map[string]radix.ReplicaSet
 	var connType string
 
-	switch db.(type) {
+	connType, replicaSets, err = getReplicaSets(db)
 
-	case *radix.Sentinel:
-		replicaSets, err = db.(*radix.Sentinel).Clients()
-		connType = "Sentinel"
-
-	case radix.MultiClient:
-		replicaSets, err = db.Clients()
-		connType = "MultiClient"
-
-	case *radix.Cluster:
-		replicaSets, err = db.(*radix.Cluster).Clients()
-		connType = "Cluster"
-	}
 	if err != nil {
 		return dbplugin.DeleteUserResponse{}, errwrap.Wrapf(fmt.Sprintf("retrieving %s clients failed error: {{err}}", connType), err)
 	}
+
 	for node, rs := range replicaSets {
 		for _, v := range getClientsFromRS(rs) {
 			v.Do(ctx, radix.Cmd(&response, "ACL", "DELUSER", req.Username))
@@ -182,23 +171,12 @@ func newUser(ctx context.Context, db radix.MultiClient, username, mode string, r
 	var replicaSets map[string]radix.ReplicaSet
 	var connType string
 
-	switch db.(type) {
+	connType, replicaSets, err = getReplicaSets(db)
 
-	case *radix.Sentinel:
-		replicaSets, err = db.(*radix.Sentinel).Clients()
-		connType = "Sentinel"
-
-	case radix.MultiClient:
-		replicaSets, err = db.Clients()
-		connType = "MultiClient"
-
-	case *radix.Cluster:
-		replicaSets, err = db.(*radix.Cluster).Clients()
-		connType = "Cluster"
-	}
 	if err != nil {
 		return errwrap.Wrapf(fmt.Sprintf("retrieving %s clients failed error: {{err}}", connType), err)
 	}
+
 	for node, rs := range replicaSets {
 		for _, v := range getClientsFromRS(rs) {
 
@@ -241,20 +219,8 @@ func (c *RedisDB) changeUserPassword(ctx context.Context, username, password str
 	var replicaSets map[string]radix.ReplicaSet
 	var connType string
 
-	switch db.(type) {
+	connType, replicaSets, err = getReplicaSets(db)
 
-	case *radix.Sentinel:
-		replicaSets, err = db.(*radix.Sentinel).Clients()
-		connType = "Sentinel"
-
-	case radix.MultiClient:
-		replicaSets, err = db.Clients()
-		connType = "MultiClient"
-
-	case *radix.Cluster:
-		replicaSets, err = db.(*radix.Cluster).Clients()
-		connType = "Cluster"
-	}
 	if err != nil {
 		return errwrap.Wrapf(fmt.Sprintf("retrieving %s clients failed error: {{err}}", connType), err)
 	}
@@ -278,20 +244,8 @@ func (c *RedisDB) changeUserPassword(ctx context.Context, username, password str
 	// go ahead an change the password
 	var sresponse string
 
-	switch db.(type) {
+	connType, replicaSets, err = getReplicaSets(db)
 
-	case *radix.Sentinel:
-		replicaSets, err = db.(*radix.Sentinel).Clients()
-		connType = "Sentinel"
-
-	case radix.MultiClient:
-		replicaSets, err = db.Clients()
-		connType = "MultiClient"
-
-	case *radix.Cluster:
-		replicaSets, err = db.(*radix.Cluster).Clients()
-		connType = "Cluster"
-	}
 	if err != nil {
 		return errwrap.Wrapf(fmt.Sprintf("retrieving %s clients failed error: {{err}}", connType), err)
 	}
@@ -413,4 +367,22 @@ func getClientsFromRS(rs radix.ReplicaSet) []radix.Client {
 		c = append(c, rs.Secondaries[s])
 	}
 	return c
+}
+
+func getReplicaSets(client radix.MultiClient) (connType string, replicaSets map[string]radix.ReplicaSet, err error) {
+	switch client.(type) {
+
+	case *radix.Sentinel:
+		replicaSets, err = client.(*radix.Sentinel).Clients()
+		connType = "Sentinel"
+
+	case radix.MultiClient:
+		replicaSets, err = client.Clients()
+		connType = "MultiClient"
+
+	case *radix.Cluster:
+		replicaSets, err = client.(*radix.Cluster).Clients()
+		connType = "Cluster"
+	}
+	return connType, replicaSets, err
 }
