@@ -186,7 +186,7 @@ func newUser(ctx context.Context, db radix.MultiClient, username, mode string, r
 			}
 			err = persistChange(ctx, v, mode)
 			if err != nil {
-				return errwrap.Wrapf(fmt.Sprintf("persist error for node %s: {{err}}", node), err)
+				return errwrap.Wrapf(fmt.Sprintf("error persisting newUser on node %s: {{err}}", node), err)
 			}
 		}
 	}
@@ -229,7 +229,7 @@ func (c *RedisDB) changeUserPassword(ctx context.Context, username, password str
 
 			err = v.Do(ctx, radix.Cmd(&mn, "ACL", "GETUSER", username))
 			if errors.As(err, &redisErr) {
-				fmt.Printf("redis error returned: %s", redisErr.Error())
+				return err
 			}
 
 			if err != nil {
@@ -257,7 +257,7 @@ func (c *RedisDB) changeUserPassword(ctx context.Context, username, password str
 			}
 			err = persistChange(ctx, v, c.Persistence)
 			if err != nil {
-				return errwrap.Wrapf(fmt.Sprintf("error persisting password change on node %s: {{err}}", node), err)
+				return errwrap.Wrapf(fmt.Sprintf("error persisting changeUserPassword on node %s: {{err}}", node), err)
 			}
 		}
 	}
@@ -342,6 +342,37 @@ func (c *redisDBConnectionProducer) GetDialer(username, password string) (dialer
 	return dialer, nil
 }
 
+func checkPersistence(ctx context.Context, client radix.MultiClient) error {
+
+	var replicaSets map[string]radix.ReplicaSet
+	var connType string
+
+	connType, replicaSets, err := getReplicaSets(client)
+
+	if err != nil {
+		return fmt.Errorf("retrieving %s clients failed error: %w", connType, err)
+	}
+	
+	var response []string
+	mb := radix.Maybe{Rcv: &response}
+
+	for _, rs := range replicaSets {
+		for _, v := range getClientsFromRS(rs) {
+			err = v.Do(ctx, radix.Cmd(&mb, "CONFIG", "GET", "ACLFILE"))
+			if err != nil {
+				return err
+			} else if mb.Null {
+				return fmt.Errorf("Error geting ACLFILE config setting")
+			} else {
+				if len(response[1]) == 0 {
+					return fmt.Errorf("ACL file not set on REDIS node %q, persistence not possible.", v.Addr().String())
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func persistChange(ctx context.Context, client radix.Client, pmode string) error {
 	var response string
 	var err error
@@ -383,6 +414,9 @@ func getReplicaSets(client radix.MultiClient) (connType string, replicaSets map[
 	case *radix.Cluster:
 		replicaSets, err = client.(*radix.Cluster).Clients()
 		connType = "Cluster"
+
+	default:
+		err = fmt.Errorf("Unsupported client type passed to getReplicaSets") 
 	}
 	return connType, replicaSets, err
 }

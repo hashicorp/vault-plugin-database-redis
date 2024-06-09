@@ -105,10 +105,17 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 	}
 
 	c.Initialized = true
-
+	// Include checking ACLFILE persistence mode, abort if it is not supported on all nodes.
+	// Not checking CONFIG REWRITE mode as it is not the recommended way to store credentials and could have other side effects
 	if verifyConnection {
-		if _, err := c.Connection(ctx); err != nil {
+		db, err := c.Connection(ctx)
+		if err != nil {
 			return nil, fmt.Errorf("error verifying connection with user %s: %w", c.Username, err)
+		}
+		if c.Persistence == "ACLFILE" {
+			if err = checkPersistence(ctx, db.(radix.MultiClient)); err != nil {
+				return nil, err
+			}
 		}
 	}
 

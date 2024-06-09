@@ -318,7 +318,12 @@ func testRedisDBInitialize_persistence(t *testing.T, host string, port int) {
 	}
 
 	err = setupRedisDBInitialize(t, connectionDetails)
-	if err != nil {
+
+	if persistence_mode == "None" && err == nil {
+		t.Fatalf("Testing Init() with persistence_node detected as \"None\" should have failed but did not.")
+	}
+	
+	if err != nil && persistence_mode == "ACLFILE" {
 		t.Fatalf("Testing Init() with perstence_mode aclfile failed: %s", err)
 	}
 }
@@ -1106,11 +1111,6 @@ func checkPersistenceMode(address string, port int, adminUsername, adminPassword
 	fmt.Printf("Checking the supported persistence mode.\n")
 
 	host := address
-	//	var cluster_rules []string
-
-	if port == -1 {
-		//		cluster_rules = []string{"+readonly", "+cluster"}
-	}
 
 	connectionDetails := map[string]interface{}{
 		"primary_host":         host,
@@ -1131,7 +1131,7 @@ func checkPersistenceMode(address string, port int, adminUsername, adminPassword
 
 	initReq := dbplugin.InitializeRequest{
 		Config:           connectionDetails,
-		VerifyConnection: true,
+		VerifyConnection: false, // false as we don't want the built in persistence check
 	}
 
 	db := new()
@@ -1144,42 +1144,22 @@ func checkPersistenceMode(address string, port int, adminUsername, adminPassword
 		return fmt.Errorf("Database should be initialized"), ""
 	}
 
-	var replicaSets map[string]radix.ReplicaSet
-	var connType string
+	ctx, _ := context.WithTimeout(context.Background(), 5000*time.Millisecond)
 
-	connType, replicaSets, err = getReplicaSets(db.client)
+	client, err := db.getConnection(ctx)
 
 	if err != nil {
-		return fmt.Errorf("retrieving %s clients failed error: %w", connType, err), ""
+		return err, ""
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), 5000*time.Millisecond)
-	var response []string
-	mb := radix.Maybe{Rcv: &response}
-	// var redisErr resp3.SimpleError
-
-	for _, rs := range replicaSets {
-		for _, v := range getClientsFromRS(rs) {
-			err = v.Do(ctx, radix.Cmd(&mb, "CONFIG", "GET", "ACLFILE"))
-			if err != nil {
-				return err, ""
-			} else if mb.Null {
-				return fmt.Errorf("Error geting ACLFILE config setting"), ""
-			} else {
-				if len(response[1]) == 0 {
-					return fmt.Errorf("ACL file not set on REDIS node %q, persistence not possible.", v.Addr().String()), ""
-				}
-			}
-		}
+	err = checkPersistence(ctx, client.(radix.MultiClient))
+	
+	db.Close()
+	
+	if err == nil {
+		return nil, "ACLFILE"
 	}
-
-	if db.client != nil {
-		if err = db.client.Close(); err != nil {
-			return err, ""
-		}
-	}
-
-	return err, "ACLFILE"
+	return err, ""
 }
 
 func createUser(address string, port int, adminUsername, adminPassword, username, password, aclRule string) (err error) {
