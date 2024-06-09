@@ -36,10 +36,10 @@ To run tests, `go test` will first set up the docker.io/redis:latest database im
 
 - `TEST_REDIS_PRIMARY_HOST` and `TEST_REDIS_PRIMARY_PORT` for a standalone server.
 - `TEST_REDIS_PRIMARY_HOST`, `TEST_REDIS_PRIMARY_PORT` and `TEST_REDIS_SECONDARIES` for a server with primary and N secondary's.
-- `TEST_REDIS_CLUSTER` for a Redis cluster installation. **Note:** One server and port combination is enought for testing an the plugin will be able to fetch the clusters topography.
+- `TEST_REDIS_CLUSTER` for a Redis cluster installation. **Note:** One server and port combination is enough for testing as the plugin will be able to fetch the clusters topography.
 - `TEST_REDIS_SENTINELS` and `TEST_REDIS_SENTINEL_MASTER_NAME` for a sentinel installation.
 
-**Note:** The tests assume that the redis database installation has a default user with the following ACL settings `user default on >default-pa55w0rd ~* +@all`. If it doesn't, you will need to align the Administrator username and password with the pre-set values in the `redis_test.go` file.
+**Note:** The tests assume that the redis database installation has a default user with the following ACL settings `user default on >default-pa55w0rd ~* +@all`. If it doesn't, you will need to align the Administrator username and password with the pre-set values in the `redis_test.go` file. The cluster, sentinel and primary-secondary terraform created Redis test installations populate the Redis servers `aclfile /tmp/users.acl` with the default user `default` with the same `default-pa55w0rd`.
 
 Set `VAULT_ACC=1` to execute all of the tests including the acceptance tests, or run just a subset of tests by using a command like `go test -run TestDriver/Init` for example.
 
