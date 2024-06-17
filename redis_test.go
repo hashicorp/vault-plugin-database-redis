@@ -33,6 +33,8 @@ const (
 
 var (
 	redisTls                   = false
+	redis_host                 = ""
+	redis_port                 = 0
 	redis_secondaries          = ""
 	redis_cluster_hosts        = ""
 	redis_sentinel_hosts       = ""
@@ -44,14 +46,13 @@ func prepareRedisTestContainer(t *testing.T) (func(), string, int) {
 	if os.Getenv("TEST_REDIS_TLS") != "" {
 		redisTls = true
 	}
-	if env := os.Getenv("TEST_REDIS_PRIMARY_HOST"); env != "" {
+	if host := os.Getenv("TEST_REDIS_PRIMARY_HOST"); host != "" {
 		redis_secondaries = os.Getenv("TEST_REDIS_SECONDARIES")
 		port, err := strconv.Atoi(os.Getenv("TEST_REDIS_PRIMARY_PORT"))
 		if err != nil {
 			port = 6379
 		}
-		fmt.Printf("HOST = %s, port=%d\n", env, port)
-		return func() {}, env, port
+		return func() {}, host, port
 	}
 	if env := os.Getenv("TEST_REDIS_CLUSTER"); env != "" {
 		redis_cluster_hosts = env
@@ -126,7 +127,8 @@ func prepareRedisTestContainer(t *testing.T) (func(), string, int) {
 
 func TestDriver(t *testing.T) {
 	var err error
-	// var caCert []byte
+	var cleanup func()
+
 	if os.Getenv("TEST_REDIS_TLS") != "" {
 		caCertFile := os.Getenv("CA_CERT_FILE")
 		_, err = os.ReadFile(caCertFile)
@@ -135,46 +137,41 @@ func TestDriver(t *testing.T) {
 		}
 	}
 
-	// Spin up redis
-	cleanup, host, port := prepareRedisTestContainer(t)
+	// Spin up container Redis or process environment variables to connect to test Redis instances
+	cleanup, redis_host, redis_port = prepareRedisTestContainer(t)
 	defer cleanup()
 
-	// We are testing sentinel or cluster so clear host.
-	if port < 0 {
-		host = ""
-	}
-
-	err, persistence_mode = checkPersistenceMode(host, port, defaultUsername, defaultPassword)
+	err, persistence_mode = checkPersistenceMode(defaultUsername, defaultPassword)
 	if err != nil {
 		t.Log("Check for ACLSAVE persistence mode did not pass.")
 		persistence_mode = "None"
 	}
 
-	err = createUser(host, port, defaultUsername, defaultPassword, "Administrator", "password", aclCat)
+	err = createUser(defaultUsername, defaultPassword, "Administrator", "password", aclCat)
 	if err != nil {
 		t.Fatalf("Failed to create Administrator user using 'default' user: %s", err)
 	}
-	err = createUser(host, port, adminUsername, adminPassword, "rotate-root", "rotate-rootpassword", aclCat)
+	err = createUser(adminUsername, adminPassword, "rotate-root", "rotate-rootpassword", aclCat)
 	if err != nil {
 		t.Fatalf("Failed to create rotate-root test user: %s", err)
 	}
-	err = createUser(host, port, adminUsername, adminPassword, "vault-edu", "password", aclCat)
+	err = createUser(adminUsername, adminPassword, "vault-edu", "password", aclCat)
 	if err != nil {
 		t.Fatalf("Failed to create vault-edu test user: %s", err)
 	}
 
-	t.Run("Init", func(t *testing.T) { testRedisDBInitialize_NoTLS(t, host, port) })
-	t.Run("Init", func(t *testing.T) { testRedisDBInitialize_persistence(t, host, port) })
-	t.Run("Init", func(t *testing.T) { testRedisDBInitialize_TLS(t, host, port) })
-	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser(t, host, port) })
-	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_DefaultRule(t, host, port) })
-	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_plusRole(t, host, port) })
-	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_groupOnly(t, host, port) })
-	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_roleAndSelector(t, host, port) })
-	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_persistAclFile(t, host, port) })
+	t.Run("Init", func(t *testing.T) { testRedisDBInitialize_NoTLS(t) })
+	t.Run("Init", func(t *testing.T) { testRedisDBInitialize_persistence(t) })
+	t.Run("Init", func(t *testing.T) { testRedisDBInitialize_TLS(t) })
+	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser(t) })
+	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_DefaultRule(t) })
+	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_plusRole(t) })
+	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_groupOnly(t) })
+	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_roleAndSelector(t) })
+	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_persistAclFile(t) })
 	// t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreate_persistConfig(t, host, port) })
-	t.Run("Rotate", func(t *testing.T) { testRedisDBRotateRootCredentials(t, host, port) })
-	t.Run("Creds", func(t *testing.T) { testRedisDBSetCredentials(t, host, port) })
+	t.Run("Rotate", func(t *testing.T) { testRedisDBRotateRootCredentials(t) })
+	t.Run("Creds", func(t *testing.T) { testRedisDBSetCredentials(t) })
 	t.Run("Secret", func(t *testing.T) { testConnectionProducerSecretValues(t) })
 	t.Run("TimeoutCalc", func(t *testing.T) { testComputeTimeout(t) })
 }
@@ -202,50 +199,33 @@ func setupRedisDBInitialize(t *testing.T, connectionDetails map[string]interface
 	return nil
 }
 
-func testRedisDBInitialize_NoTLS(t *testing.T, host string, port int) {
+func testRedisDBInitialize_NoTLS(t *testing.T) {
 	if redisTls {
 		t.Skip("skipping plain text Init() test in TLS mode")
 	}
 
 	t.Log("Testing plain text Init()")
 
-	connectionDetails := map[string]interface{}{
-		"primary_host":         host,
-		"primary_port":         port,
-		"secondaries":          redis_secondaries,
-		"cluster":              redis_cluster_hosts,
-		"sentinels":            redis_sentinel_hosts,
-		"sentinel_master_name": redis_sentinel_master_name,
-		"username":             adminUsername,
-		"password":             adminPassword,
-		"sentinel_username":    sentinelUsername,
-		"sentinel_password":    sentinelPassword,
-	}
+	connectionDetails := make(map[string]interface{})
+
+	setupParameters(&connectionDetails, "", "", "")
+
 	err := setupRedisDBInitialize(t, connectionDetails)
 	if err != nil {
 		t.Fatalf("Testing Init() failed: error: %s", err)
 	}
 }
 
-func testRedisDBInitialize_TLS(t *testing.T, host string, port int) {
+func testRedisDBInitialize_TLS(t *testing.T) {
 	if !redisTls {
 		t.Skip("skipping TLS Init() test in plain text mode")
 	}
 
 	t.Log("Testing TLS Init()")
 
-	connectionDetails := map[string]interface{}{
-		"primary_host":         host,
-		"primary_port":         port,
-		"secondaries":          redis_secondaries,
-		"cluster":              redis_cluster_hosts,
-		"sentinels":            redis_sentinel_hosts,
-		"sentinel_master_name": redis_sentinel_master_name,
-		"username":             adminUsername,
-		"password":             adminPassword,
-		"sentinel_username":    sentinelUsername,
-		"sentinel_password":    sentinelPassword,
-	}
+	connectionDetails := make(map[string]interface{})
+
+	setupParameters(&connectionDetails, "", "", "")
 
 	if err := setupCertificates(&connectionDetails); err != nil {
 		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
@@ -256,27 +236,16 @@ func testRedisDBInitialize_TLS(t *testing.T, host string, port int) {
 	}
 }
 
-func testRedisDBInitialize_persistence(t *testing.T, host string, port int) {
+func testRedisDBInitialize_persistence(t *testing.T) {
 	if redisTls {
 		t.Skip("skipping plain text Init() with persistence_mode test in TLS mode")
 	}
 
 	t.Log("Testing plain text Init() with persistence_mode")
 
-	connectionDetails := map[string]interface{}{
-		"primary_host":         host,
-		"primary_port":         port,
-		"secondaries":          redis_secondaries,
-		"cluster":              redis_cluster_hosts,
-		"sentinels":            redis_sentinel_hosts,
-		"sentinel_master_name": redis_sentinel_master_name,
-		"username":             adminUsername,
-		"password":             adminPassword,
-		"sentinel_username":    sentinelUsername,
-		"sentinel_password":    sentinelPassword,
+	connectionDetails := make(map[string]interface{})
 
-		"persistence_mode": "garbage",
-	}
+	setupParameters(&connectionDetails, "", "", "garbage")
 
 	err := setupRedisDBInitialize(t, connectionDetails)
 
@@ -284,38 +253,18 @@ func testRedisDBInitialize_persistence(t *testing.T, host string, port int) {
 		t.Fatalf("Testing Init() should have failed as the perstence_mode is garbage.")
 	}
 
-	connectionDetails = map[string]interface{}{
-		"primary_host":         host,
-		"primary_port":         port,
-		"secondaries":          redis_secondaries,
-		"cluster":              redis_cluster_hosts,
-		"sentinels":            redis_sentinel_hosts,
-		"sentinel_master_name": redis_sentinel_master_name,
-		"username":             adminUsername,
-		"password":             adminPassword,
-		"sentinel_username":    sentinelUsername,
-		"sentinel_password":    sentinelPassword,
-		"persistence_mode":     "rewrite",
-	}
+	connectionDetails = make(map[string]interface{})
+
+	setupParameters(&connectionDetails, "", "", "rewrite")
 
 	err = setupRedisDBInitialize(t, connectionDetails)
 	if err != nil {
 		t.Fatalf("Testing Init() with perstence_mode rewrite failed: %s.", err)
 	}
 
-	connectionDetails = map[string]interface{}{
-		"primary_host":         host,
-		"primary_port":         port,
-		"secondaries":          redis_secondaries,
-		"cluster":              redis_cluster_hosts,
-		"sentinels":            redis_sentinel_hosts,
-		"sentinel_master_name": redis_sentinel_master_name,
-		"username":             adminUsername,
-		"password":             adminPassword,
-		"sentinel_username":    sentinelUsername,
-		"sentinel_password":    sentinelPassword,
-		"persistence_mode":     "aclfile",
-	}
+	connectionDetails = make(map[string]interface{})
+
+	setupParameters(&connectionDetails, "", "", "aclfile")
 
 	err = setupRedisDBInitialize(t, connectionDetails)
 
@@ -328,32 +277,22 @@ func testRedisDBInitialize_persistence(t *testing.T, host string, port int) {
 	}
 }
 
-func testRedisDBCreateUser(t *testing.T, address string, port int) {
+func testRedisDBCreateUser(t *testing.T) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
 
 	t.Log("Testing CreateUser()")
 
-	host := address
 	var rule []string
 	// if it is a cluster then these two rules are needed for the user to be able to connect.
 	if len(redis_cluster_hosts) != 0 {
 		rule = []string{`["+readonly", "+cluster"]`}
 	}
 
-	connectionDetails := map[string]interface{}{
-		"primary_host":         host,
-		"primary_port":         port,
-		"secondaries":          redis_secondaries,
-		"cluster":              redis_cluster_hosts,
-		"sentinels":            redis_sentinel_hosts,
-		"sentinel_master_name": redis_sentinel_master_name,
-		"username":             adminUsername,
-		"password":             adminPassword,
-		"sentinel_username":    sentinelUsername,
-		"sentinel_password":    sentinelPassword,
-	}
+	connectionDetails := make(map[string]interface{})
+
+	setupParameters(&connectionDetails, "", "", "")
 
 	if err := setupCertificates(&connectionDetails); err != nil {
 		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
@@ -395,37 +334,26 @@ func testRedisDBCreateUser(t *testing.T, address string, port int) {
 
 	db.Close()
 
-	if err := checkCredsExist(t, userResp.Username, password, address, port); err != nil {
+	if err := checkCredsExist(t, userResp.Username, password); err != nil {
 		t.Fatalf("Could not connect with new credentials: %s", err)
 	}
 
-	err = revokeUser(t, userResp.Username, address, port)
+	err = revokeUser(t, userResp.Username)
 	if err != nil {
 		t.Fatalf("Could not revoke user: %s", userResp.Username)
 	}
 }
 
-func checkCredsExist(t *testing.T, username, password, address string, port int) error {
+func checkCredsExist(t *testing.T, username, password string) error {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
 
 	t.Log("Testing checkCredsExist()")
 
-	host := address
+	connectionDetails := make(map[string]interface{})
 
-	connectionDetails := map[string]interface{}{
-		"primary_host":         host,
-		"primary_port":         port,
-		"secondaries":          redis_secondaries,
-		"cluster":              redis_cluster_hosts,
-		"sentinels":            redis_sentinel_hosts,
-		"sentinel_master_name": redis_sentinel_master_name,
-		"username":             username,
-		"password":             password,
-		"sentinel_username":    sentinelUsername,
-		"sentinel_password":    sentinelPassword,
-	}
+	setupParameters(&connectionDetails, username, password, "")
 
 	if err := setupCertificates(&connectionDetails); err != nil {
 		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
@@ -450,27 +378,16 @@ func checkCredsExist(t *testing.T, username, password, address string, port int)
 	return nil
 }
 
-func checkRuleAllowed(t *testing.T, username, password, address string, port int, cmd string, rules []string) error {
+func checkRuleAllowed(t *testing.T, username, password, cmd string, rules []string) error {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
 
 	t.Log("Testing checkRuleAllowed()")
 
-	host := address
+	connectionDetails := make(map[string]interface{})
 
-	connectionDetails := map[string]interface{}{
-		"primary_host":         host,
-		"primary_port":         port,
-		"secondaries":          redis_secondaries,
-		"cluster":              redis_cluster_hosts,
-		"sentinels":            redis_sentinel_hosts,
-		"sentinel_master_name": redis_sentinel_master_name,
-		"username":             username,
-		"password":             password,
-		"sentinel_username":    sentinelUsername,
-		"sentinel_password":    sentinelPassword,
-	}
+	setupParameters(&connectionDetails, username, password, "")
 
 	if err := setupCertificates(&connectionDetails); err != nil {
 		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
@@ -499,27 +416,16 @@ func checkRuleAllowed(t *testing.T, username, password, address string, port int
 	return err
 }
 
-func revokeUser(t *testing.T, username, address string, port int) error {
+func revokeUser(t *testing.T, username string) error {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
 
 	t.Log("Testing RevokeUser()")
 
-	host := address
+	connectionDetails := make(map[string]interface{})
 
-	connectionDetails := map[string]interface{}{
-		"primary_host":         host,
-		"primary_port":         port,
-		"secondaries":          redis_secondaries,
-		"cluster":              redis_cluster_hosts,
-		"sentinels":            redis_sentinel_hosts,
-		"sentinel_master_name": redis_sentinel_master_name,
-		"username":             adminUsername,
-		"password":             adminPassword,
-		"sentinel_username":    sentinelUsername,
-		"sentinel_password":    sentinelPassword,
-	}
+	setupParameters(&connectionDetails, "", "", "")
 
 	if err := setupCertificates(&connectionDetails); err != nil {
 		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
@@ -549,14 +455,12 @@ func revokeUser(t *testing.T, username, address string, port int) error {
 	return nil
 }
 
-func testRedisDBCreateUser_DefaultRule(t *testing.T, address string, port int) {
+func testRedisDBCreateUser_DefaultRule(t *testing.T) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
 
 	t.Log("Testing CreateUser_DefaultRule()")
-
-	host := address
 
 	var rules []string
 	// cluster user needs additional permissions.
@@ -566,18 +470,9 @@ func testRedisDBCreateUser_DefaultRule(t *testing.T, address string, port int) {
 		rules = []string{`["~foo", "+@read"]`}
 	}
 
-	connectionDetails := map[string]interface{}{
-		"primary_host":         host,
-		"primary_port":         port,
-		"secondaries":          redis_secondaries,
-		"cluster":              redis_cluster_hosts,
-		"sentinels":            redis_sentinel_hosts,
-		"sentinel_master_name": redis_sentinel_master_name,
-		"username":             adminUsername,
-		"password":             adminPassword,
-		"sentinel_username":    sentinelUsername,
-		"sentinel_password":    sentinelPassword,
-	}
+	connectionDetails := make(map[string]interface{})
+
+	setupParameters(&connectionDetails, "", "", "")
 
 	if err := setupCertificates(&connectionDetails); err != nil {
 		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
@@ -618,20 +513,20 @@ func testRedisDBCreateUser_DefaultRule(t *testing.T, address string, port int) {
 		t.Fatalf("err: %s", err)
 	}
 
-	if err := checkCredsExist(t, userResp.Username, password, address, port); err != nil {
+	if err := checkCredsExist(t, userResp.Username, password); err != nil {
 		t.Fatalf("Could not connect with new credentials: %s", err)
 	}
 	params := []string{"foo"}
-	if err := checkRuleAllowed(t, userResp.Username, password, address, port, "get", params); err != nil {
+	if err := checkRuleAllowed(t, userResp.Username, password, "get", params); err != nil {
 		t.Fatalf("get failed for user %s with +@read rule: %s", userResp.Username, err)
 	}
 
 	params = []string{"foo", "bar"}
-	if err = checkRuleAllowed(t, userResp.Username, password, address, port, "set", params); err == nil {
+	if err = checkRuleAllowed(t, userResp.Username, password, "set", params); err == nil {
 		t.Fatalf("set did not fail user %s with +@read rule: %s", userResp.Username, err)
 	}
 
-	err = revokeUser(t, userResp.Username, address, port)
+	err = revokeUser(t, userResp.Username)
 	if err != nil {
 		t.Fatalf("Could not revoke user: %s", userResp.Username)
 	}
@@ -639,27 +534,16 @@ func testRedisDBCreateUser_DefaultRule(t *testing.T, address string, port int) {
 	db.Close()
 }
 
-func testRedisDBCreateUser_plusRole(t *testing.T, address string, port int) {
+func testRedisDBCreateUser_plusRole(t *testing.T) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
 
 	t.Log("Testing CreateUser_plusRole()")
 
-	host := address
+	connectionDetails := make(map[string]interface{})
 
-	connectionDetails := map[string]interface{}{
-		"primary_host":         host,
-		"primary_port":         port,
-		"secondaries":          redis_secondaries,
-		"cluster":              redis_cluster_hosts,
-		"sentinels":            redis_sentinel_hosts,
-		"sentinel_master_name": redis_sentinel_master_name,
-		"username":             adminUsername,
-		"password":             adminPassword,
-		"sentinel_username":    sentinelUsername,
-		"sentinel_password":    sentinelPassword,
-	}
+	setupParameters(&connectionDetails, "", "", "")
 
 	if err := setupCertificates(&connectionDetails); err != nil {
 		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
@@ -701,36 +585,25 @@ func testRedisDBCreateUser_plusRole(t *testing.T, address string, port int) {
 
 	db.Close()
 
-	if err := checkCredsExist(t, userResp.Username, password, address, port); err != nil {
+	if err := checkCredsExist(t, userResp.Username, password); err != nil {
 		t.Fatalf("Could not connect with new credentials: %s", err)
 	}
 
-	err = revokeUser(t, userResp.Username, address, port)
+	err = revokeUser(t, userResp.Username)
 	if err != nil {
 		t.Fatalf("Could not revoke user: %s", userResp.Username)
 	}
 }
 
 /* [TODO] groupOnly hang over from Couchbase */
-func testRedisDBCreateUser_groupOnly(t *testing.T, address string, port int) {
+func testRedisDBCreateUser_groupOnly(t *testing.T) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
 
-	host := address
+	connectionDetails := make(map[string]interface{})
 
-	connectionDetails := map[string]interface{}{
-		"primary_host":         host,
-		"primary_port":         port,
-		"secondaries":          redis_secondaries,
-		"cluster":              redis_cluster_hosts,
-		"sentinels":            redis_sentinel_hosts,
-		"sentinel_master_name": redis_sentinel_master_name,
-		"username":             adminUsername,
-		"password":             adminPassword,
-		"sentinel_username":    sentinelUsername,
-		"sentinel_password":    sentinelPassword,
-	}
+	setupParameters(&connectionDetails, "", "", "")
 
 	if err := setupCertificates(&connectionDetails); err != nil {
 		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
@@ -772,23 +645,22 @@ func testRedisDBCreateUser_groupOnly(t *testing.T, address string, port int) {
 
 	db.Close()
 
-	if err := checkCredsExist(t, userResp.Username, password, address, port); err != nil {
+	if err := checkCredsExist(t, userResp.Username, password); err != nil {
 		t.Fatalf("Could not connect with new credentials: %s", err)
 	}
 
-	err = revokeUser(t, userResp.Username, address, port)
+	err = revokeUser(t, userResp.Username)
 	if err != nil {
 		t.Fatalf("Could not revoke user: %s", userResp.Username)
 	}
 }
 
-func testRedisDBCreateUser_roleAndSelector(t *testing.T, address string, port int) {
+func testRedisDBCreateUser_roleAndSelector(t *testing.T) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
 
 	t.Log("Testing CreateUser() with selector rule")
-	host := address
 
 	var rules []string
 	// cluster user needs additional permissions.
@@ -798,18 +670,9 @@ func testRedisDBCreateUser_roleAndSelector(t *testing.T, address string, port in
 		rules = []string{`["+GET", "allkeys", "(+SET ~app1*)"]`}
 	}
 
-	connectionDetails := map[string]interface{}{
-		"primary_host":         host,
-		"primary_port":         port,
-		"secondaries":          redis_secondaries,
-		"cluster":              redis_cluster_hosts,
-		"sentinels":            redis_sentinel_hosts,
-		"sentinel_master_name": redis_sentinel_master_name,
-		"username":             adminUsername,
-		"password":             adminPassword,
-		"sentinel_username":    sentinelUsername,
-		"sentinel_password":    sentinelPassword,
-	}
+	connectionDetails := make(map[string]interface{})
+
+	setupParameters(&connectionDetails, "", "", "")
 
 	if err := setupCertificates(&connectionDetails); err != nil {
 		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
@@ -851,18 +714,17 @@ func testRedisDBCreateUser_roleAndSelector(t *testing.T, address string, port in
 
 	db.Close()
 
-	if err := checkCredsExist(t, userResp.Username, password, address, port); err != nil {
+	if err := checkCredsExist(t, userResp.Username, password); err != nil {
 		t.Fatalf("Could not connect with new credentials: %s", err)
 	}
 
-	err = revokeUser(t, userResp.Username, address, port)
+	err = revokeUser(t, userResp.Username)
 	if err != nil {
 		t.Fatalf("Could not revoke user: %s", userResp.Username)
 	}
 }
 
-/* [TODO] change to test SAVE ACLFILE if supported.*/
-func testRedisDBCreateUser_persistAclFile(t *testing.T, address string, port int) {
+func testRedisDBCreateUser_persistAclFile(t *testing.T) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
@@ -871,23 +733,11 @@ func testRedisDBCreateUser_persistAclFile(t *testing.T, address string, port int
 		t.Skip("Skipping persist config as this REDIS installation is not configured to use an acl file.")
 	}
 
-	host := address
-
 	t.Log("Testing CreateUser_persist()")
 
-	connectionDetails := map[string]interface{}{
-		"primary_host":         host,
-		"primary_port":         port,
-		"secondaries":          redis_secondaries,
-		"cluster":              redis_cluster_hosts,
-		"sentinels":            redis_sentinel_hosts,
-		"sentinel_master_name": redis_sentinel_master_name,
-		"username":             adminUsername,
-		"password":             adminPassword,
-		"sentinel_username":    sentinelUsername,
-		"sentinel_password":    sentinelPassword,
-		"persistence_mode":     "aclfile",
-	}
+	connectionDetails := make(map[string]interface{})
+
+	setupParameters(&connectionDetails, "", "", "aclfile")
 
 	if err := setupCertificates(&connectionDetails); err != nil {
 		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
@@ -929,37 +779,26 @@ func testRedisDBCreateUser_persistAclFile(t *testing.T, address string, port int
 
 	db.Close()
 
-	if err := checkCredsExist(t, userResp.Username, password, address, port); err != nil {
+	if err := checkCredsExist(t, userResp.Username, password); err != nil {
 		t.Fatalf("Could not connect with new credentials: %s", err)
 	}
 
-	err = revokeUser(t, userResp.Username, address, port)
+	err = revokeUser(t, userResp.Username)
 	if err != nil {
 		t.Fatalf("Could not revoke user: %s", userResp.Username)
 	}
 }
 
-func testRedisDBRotateRootCredentials(t *testing.T, address string, port int) {
+func testRedisDBRotateRootCredentials(t *testing.T) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
 
 	t.Log("Testing RotateRootCredentials()")
 
-	host := address
+	connectionDetails := make(map[string]interface{})
 
-	connectionDetails := map[string]interface{}{
-		"primary_host":         host,
-		"primary_port":         port,
-		"secondaries":          redis_secondaries,
-		"cluster":              redis_cluster_hosts,
-		"sentinels":            redis_sentinel_hosts,
-		"sentinel_master_name": redis_sentinel_master_name,
-		"username":             "rotate-root",
-		"password":             "rotate-rootpassword",
-		"sentinel_username":    sentinelUsername,
-		"sentinel_password":    sentinelPassword,
-	}
+	setupParameters(&connectionDetails, "rotate-root", "rotate-rootpassword", "")
 
 	if err := setupCertificates(&connectionDetails); err != nil {
 		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
@@ -995,30 +834,19 @@ func testRedisDBRotateRootCredentials(t *testing.T, address string, port int) {
 	}
 
 	// defer setting the password back in case the test fails.
-	defer doRedisDBSetCredentials(t, "rotate-root", "rotate-rootpassword", address, port)
+	defer doRedisDBSetCredentials(t, "rotate-root", "rotate-rootpassword")
 
-	if err := checkCredsExist(t, db.Username, "newpassword", address, port); err != nil {
+	if err := checkCredsExist(t, db.Username, "newpassword"); err != nil {
 		t.Fatalf("Could not connect with new RotatedRootcredentials: %s", err)
 	}
 }
 
-func doRedisDBSetCredentials(t *testing.T, username, password, address string, port int) {
+func doRedisDBSetCredentials(t *testing.T, username, password string) {
 	t.Log("Testing SetCredentials()")
 
-	host := address
+	connectionDetails := make(map[string]interface{})
 
-	connectionDetails := map[string]interface{}{
-		"primary_host":         host,
-		"primary_port":         port,
-		"secondaries":          redis_secondaries,
-		"cluster":              redis_cluster_hosts,
-		"sentinels":            redis_sentinel_hosts,
-		"sentinel_master_name": redis_sentinel_master_name,
-		"username":             adminUsername,
-		"password":             adminPassword,
-		"sentinel_username":    sentinelUsername,
-		"sentinel_password":    sentinelPassword,
-	}
+	setupParameters(&connectionDetails, "", "", "")
 
 	if err := setupCertificates(&connectionDetails); err != nil {
 		t.Fatal(fmt.Errorf("Issue encounted processing X509 inputs: %w", err))
@@ -1068,17 +896,17 @@ func doRedisDBSetCredentials(t *testing.T, username, password, address string, p
 
 	db.Close()
 
-	if err := checkCredsExist(t, username, password, address, port); err != nil {
+	if err := checkCredsExist(t, username, password); err != nil {
 		t.Fatalf("Could not connect with rotated credentials: %s", err)
 	}
 }
 
-func testRedisDBSetCredentials(t *testing.T, host string, port int) {
+func testRedisDBSetCredentials(t *testing.T) {
 	if os.Getenv("VAULT_ACC") == "" {
 		t.SkipNow()
 	}
 
-	doRedisDBSetCredentials(t, "vault-edu", "password", host, port)
+	doRedisDBSetCredentials(t, "vault-edu", "password")
 }
 
 func testConnectionProducerSecretValues(t *testing.T) {
@@ -1107,23 +935,12 @@ func testComputeTimeout(t *testing.T) {
 	}
 }
 
-func checkPersistenceMode(address string, port int, adminUsername, adminPassword string) (err error, mode string) {
+func checkPersistenceMode(adminUsername, adminPassword string) (err error, mode string) {
 	fmt.Printf("Checking the supported persistence mode.\n")
 
-	host := address
+	connectionDetails := make(map[string]interface{})
 
-	connectionDetails := map[string]interface{}{
-		"primary_host":         host,
-		"primary_port":         port,
-		"secondaries":          redis_secondaries,
-		"cluster":              redis_cluster_hosts,
-		"sentinels":            redis_sentinel_hosts,
-		"sentinel_master_name": redis_sentinel_master_name,
-		"username":             adminUsername,
-		"password":             adminPassword,
-		"sentinel_username":    sentinelUsername,
-		"sentinel_password":    sentinelPassword,
-	}
+	setupParameters(&connectionDetails, adminUsername, adminPassword, "")
 
 	if err := setupCertificates(&connectionDetails); err != nil {
 		return fmt.Errorf("Issue encounted processing X509 inputs: %w", err), ""
@@ -1161,9 +978,8 @@ func checkPersistenceMode(address string, port int, adminUsername, adminPassword
 	return err, ""
 }
 
-func createUser(address string, port int, adminUsername, adminPassword, username, password, aclRule string) (err error) {
+func createUser(adminUsername, adminPassword, username, password, aclRule string) (err error) {
 	fmt.Printf("Creating test user %s\n", username)
-	host := address
 
 	var cluster_rules []string
 	// extra rules needed to access cluster information
@@ -1171,18 +987,9 @@ func createUser(address string, port int, adminUsername, adminPassword, username
 		cluster_rules = []string{"+readonly", "+cluster"}
 	}
 
-	connectionDetails := map[string]interface{}{
-		"primary_host":         host,
-		"primary_port":         port,
-		"secondaries":          redis_secondaries,
-		"cluster":              redis_cluster_hosts,
-		"sentinels":            redis_sentinel_hosts,
-		"sentinel_master_name": redis_sentinel_master_name,
-		"username":             adminUsername,
-		"password":             adminPassword,
-		"sentinel_username":    sentinelUsername,
-		"sentinel_password":    sentinelPassword,
-	}
+	connectionDetails := make(map[string]interface{})
+
+	setupParameters(&connectionDetails, adminUsername, adminPassword, "")
 
 	if err := setupCertificates(&connectionDetails); err != nil {
 		return fmt.Errorf("Issue encounted processing X509 inputs: %w", err)
@@ -1230,6 +1037,30 @@ func createUser(address string, port int, adminUsername, adminPassword, username
 	}
 
 	return nil
+}
+
+func setupParameters(connectionDetails *map[string]interface{}, username, password, pmode string) {
+	(*connectionDetails)["primary_host"] = redis_host
+	(*connectionDetails)["primary_port"] = redis_port
+	(*connectionDetails)["secondaries"] = redis_secondaries
+	(*connectionDetails)["cluster"] = redis_cluster_hosts
+	(*connectionDetails)["sentinels"] = redis_sentinel_hosts
+	(*connectionDetails)["sentinel_master_name"] = redis_sentinel_master_name
+	if len(username) == 0 {
+		(*connectionDetails)["username"] = adminUsername
+	} else {
+		(*connectionDetails)["username"] = username
+	}
+	if len(password) == 0 {
+		(*connectionDetails)["password"] = adminPassword
+	} else {
+		(*connectionDetails)["password"] = password
+	}
+	(*connectionDetails)["sentinel_username"] = sentinelUsername
+	(*connectionDetails)["sentinel_password"] = sentinelPassword
+	if len(pmode) != 0 {
+		(*connectionDetails)["persistence_mode"] = pmode
+	}
 }
 
 func setupCertificates(connectionDetails *map[string]interface{}) (err error) {
