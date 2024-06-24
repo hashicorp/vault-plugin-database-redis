@@ -5,11 +5,10 @@ package redis
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/hashicorp/vault/sdk/database/helper/connutil"
@@ -18,18 +17,27 @@ import (
 )
 
 type redisDBConnectionProducer struct {
-	Host        string `json:"host"`
-	Port        int    `json:"port"`
-	Username    string `json:"username"`
-	Password    string `json:"password"`
-	TLS         bool   `json:"tls"`
-	InsecureTLS bool   `json:"insecure_tls"`
-	CACert      string `json:"ca_cert"`
+	Host               string `json:"primary_host"`
+	Port               int    `json:"primary_port"`
+	Secondaries        string `json:"secondaries"`
+	Cluster            string `json:"cluster"`
+	Sentinels          string `json:"sentinels"`
+	SentinelMasterName string `json:"sentinel_master_name"`
+	Username           string `json:"username"`
+	Password           string `json:"password"`
+	SentinelUsername   string `json:"sentinel_username"`
+	SentinelPassword   string `json:"sentinel_password"`
+	TLS                bool   `json:"tls"`
+	InsecureTLS        bool   `json:"insecure_tls"`
+	CACert             string `json:"ca_cert"`
+	TLSCert            string `json:"tls_cert"`
+	TLSKey             string `json:"tls_key"`
+	Persistence        string `json:"persistence_mode"`
 
 	Initialized bool
 	rawConfig   map[string]interface{}
 	Type        string
-	client      radix.Client
+	client      radix.MultiClient // radix.Client
 	Addr        string
 	sync.Mutex
 }
@@ -64,30 +72,50 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 	}
 
 	switch {
-	case len(c.Host) == 0:
-		return nil, fmt.Errorf("host cannot be empty")
-	case c.Port == 0:
-		return nil, fmt.Errorf("port cannot be empty")
+	case len(c.Host) == 0 && len(c.Cluster) == 0 && len(c.Sentinels) == 0:
+		return nil, fmt.Errorf("parameter primary_host, cluster or sentinels must be set")
+	case len(c.Cluster) == 0 && len(c.Sentinels) == 0 && c.Port == 0:
+		return nil, fmt.Errorf("parameter primary_port cannot be empty")
 	case len(c.Username) == 0:
 		return nil, fmt.Errorf("username cannot be empty")
 	case len(c.Password) == 0:
 		return nil, fmt.Errorf("password cannot be empty")
 	}
 
+	if len(c.Sentinels) != 0 && len(c.SentinelMasterName) == 0 {
+		return nil, fmt.Errorf("sentinel_master_name cannot be empty when creating a Redis Sentinel connection")
+	}
 	c.Addr = net.JoinHostPort(c.Host, strconv.Itoa(c.Port))
 
 	if c.TLS {
 		if len(c.CACert) == 0 {
 			return nil, fmt.Errorf("ca_cert cannot be empty")
 		}
+		if (len(c.TLSCert) == 0 && len(c.TLSKey) != 0) ||
+			(len(c.TLSCert) != 0 && len(c.TLSKey) == 0) {
+			return nil, fmt.Errorf("tls_cert and tls_key pair must both be set for mutual TLS")
+		}
+	}
+
+	if len(c.Persistence) != 0 {
+		c.Persistence = strings.ToUpper(c.Persistence)
+		if c.Persistence != "REWRITE" && "ACLFILE" != c.Persistence {
+			return nil, fmt.Errorf("persistence_mode can only be 'REWRITE' or 'ACLFILE', not %s", c.Persistence)
+		}
 	}
 
 	c.Initialized = true
-
+	// Include checking ACLFILE persistence mode, abort if it is not supported on all nodes.
+	// Not checking CONFIG REWRITE mode as it is not the recommended way to store credentials and could have other side effects
 	if verifyConnection {
-		if _, err := c.Connection(ctx); err != nil {
-			c.close()
-			return nil, fmt.Errorf("error verifying connection: %w", err)
+		db, err := c.Connection(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("error verifying connection with user %s: %w", c.Username, err)
+		}
+		if c.Persistence == "ACLFILE" {
+			if err = checkPersistence(ctx, db.(radix.MultiClient)); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -112,39 +140,64 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (interface{}
 	}
 	var err error
 	var poolConfig radix.PoolConfig
+	var clusterConfig radix.ClusterConfig
 
-	if c.TLS {
-		rootCAs := x509.NewCertPool()
-		ok := rootCAs.AppendCertsFromPEM([]byte(c.CACert))
-		if !ok {
-			return nil, fmt.Errorf("failed to parse root certificate")
-		}
-		poolConfig = radix.PoolConfig{
-			Dialer: radix.Dialer{
-				AuthUser: c.Username,
-				AuthPass: c.Password,
-				NetDialer: &tls.Dialer{
-					Config: &tls.Config{
-						RootCAs:            rootCAs,
-						InsecureSkipVerify: c.InsecureTLS,
-					},
-				},
-			},
-		}
-	} else {
-		poolConfig = radix.PoolConfig{
-			Dialer: radix.Dialer{
-				AuthUser: c.Username,
-				AuthPass: c.Password,
-			},
-		}
-	}
-
-	client, err := poolConfig.New(ctx, "tcp", c.Addr)
+	dialer, err := c.GetDialer(c.Username, c.Password)
 	if err != nil {
 		return nil, err
 	}
-	c.client = client
+
+	poolConfig = radix.PoolConfig{
+		Dialer: dialer,
+	}
+
+	if len(c.Cluster) != 0 {
+		hosts := strings.Split(c.Cluster, ",")
+		clusterConfig = radix.ClusterConfig{
+			PoolConfig: poolConfig,
+		}
+		c.client, err = clusterConfig.New(ctx, hosts)
+		if err != nil {
+			return nil, err
+		}
+	} else if len(c.Sentinels) != 0 {
+		hosts := strings.Split(c.Sentinels, ",")
+		dialer, err := c.GetDialer(c.SentinelUsername, c.SentinelPassword)
+		if err != nil {
+			return nil, err
+		}
+		sentinelConfig := radix.SentinelConfig{
+			PoolConfig:     poolConfig,
+			SentinelDialer: dialer,
+		}
+		c.client, err = sentinelConfig.New(ctx, c.SentinelMasterName, hosts)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		var client radix.Client
+		var secondaries []radix.Client
+
+		client, err = poolConfig.New(ctx, "tcp", c.Addr)
+		if err != nil {
+			return nil, err
+		}
+		if len(c.Secondaries) != 0 {
+			hosts := strings.Split(c.Secondaries, ",")
+			for _, addr := range hosts {
+				client, err := poolConfig.New(ctx, "tcp", addr)
+				if err != nil {
+					return nil, err
+				}
+				secondaries = append(secondaries, client)
+			}
+		}
+		rs := radix.ReplicaSet{
+			Primary:     client,
+			Secondaries: secondaries,
+		}
+		c.client = radix.NewMultiClient(rs)
+	}
 
 	return c.client, nil
 }

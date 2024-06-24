@@ -46,6 +46,31 @@ setup-env:
 teardown-env:
 	cd bootstrap/terraform && terraform init && terraform destroy -auto-approve
 
+.PHONY: setup-primary-secondary
+setup-primary-secondary:
+	cd bootstrap/primary-secondary && terraform init && terraform apply -auto-approve
+
+.PHONY: teardown-primary-secondary
+teardown-primary-secondary:
+	cd bootstrap/primary-secondary && terraform init && terraform destroy -auto-approve
+
+
+.PHONY: setup-cluster
+setup-cluster:
+	cd bootstrap/cluster && terraform init && terraform apply -auto-approve
+
+.PHONY: teardown-cluster
+teardown-cluster:
+	cd bootstrap/cluster && terraform init && terraform destroy -auto-approve
+
+.PHONY: setup-sentinel
+setup-sentinel:
+	cd bootstrap/sentinel && terraform init && terraform apply -auto-approve
+
+.PHONY: teardown-sentinel
+teardown-sentinel:
+	cd bootstrap/sentinel && terraform init && terraform destroy -auto-approve
+
 .PHONY: configure
 configure: dev
 	@./scripts/configure.sh \

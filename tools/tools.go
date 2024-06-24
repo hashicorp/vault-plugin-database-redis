@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 //go:build tools
+// +build tools
 
 // This file ensures tool dependencies are kept in sync.  This is the
 // recommended way of doing this according to
@@ -14,6 +15,8 @@
 package tools
 
 //go:generate go install mvdan.cc/gofumpt
+//go:generate go install github.com/itchyny/gojq/cmd/gojq
 import (
+	_ "github.com/itchyny/gojq"
 	_ "mvdan.cc/gofumpt"
 )
