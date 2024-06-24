@@ -11,9 +11,9 @@ The plugin supports the generation of static and dynamic user roles and root cre
 - Redis Cluster
 - Redis Sentinel
 
-The plugin can also be configured to persist the generated credentials using the `presistence_mode` parameter, either to the servers local ACL file, using the `ACL SAVE` commond or to the Redis configuration file with the `CONFIG REWRITE` command. The Redis installation must have either the `aclsave` file configured or a writable config file for this to work.
+The plugin can also be configured to persist the generated credentials using the `presistence_mode` parameter, either to the servers local ACL file, using the Redis `ACL SAVE` command or to the Redis configuration file with the Redis `CONFIG REWRITE` command. The Redis installation must have either the `aclsave` file configured or a writable config file for this to work.
 
-In addition the plugin has been upgraded to support X509 certificate authentication as by default, Redis uses mutual TLS and requires clients to authenticate with a valid certificate (authenticated against trusted root CAs. It is necessary to set the Redis setting `tls-auth-clients no` to disable client authentication.
+In addition the plugin has been upgraded to support X509 certificate authentication as by default, Redis uses mutual TLS and requires clients to authenticate with a valid certificate (authenticated against trusted root CAs). It is necessary to set the Redis setting `tls-auth-clients no` to disable client authentication.
 
 ## Build
 
