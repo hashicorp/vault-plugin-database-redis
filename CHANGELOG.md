@@ -1,5 +1,7 @@
 ## Unreleased
 
+## v0.4.0
+
 ## v0.3.0
 IMPROVEMENTS:
 * Updated dependencies:
