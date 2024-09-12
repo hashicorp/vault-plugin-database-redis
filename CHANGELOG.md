@@ -1,5 +1,8 @@
 ## Unreleased
 
+## v0.4.0
+* Bump go version to 1.22.6
+
 ## v0.3.0
 IMPROVEMENTS:
 * Updated dependencies:
