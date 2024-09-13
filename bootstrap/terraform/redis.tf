@@ -8,7 +8,7 @@ resource "null_resource" "docker_compose_up" {
 
   // Running down at the beginning so terraform apply can be executed multiple times to pick up on latest docker-compose.yaml changes
   provisioner "local-exec" {
-    command = "docker-compose -f ./docker-compose.yml down && docker-compose -f ./docker-compose.yml up -d"
+    command = "docker compose -f ./docker-compose.yml down && docker compose -f ./docker-compose.yml up -d"
     when    = create
   }
 }
@@ -19,7 +19,7 @@ resource "null_resource" "docker_compose_down" {
   }
 
   provisioner "local-exec" {
-    command = "docker-compose -f ./docker-compose.yml down"
+    command = "docker compose -f ./docker-compose.yml down"
     when    = destroy
   }
 }
