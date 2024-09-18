@@ -1,5 +1,10 @@
 ## Unreleased
 
+## v0.4.0
+* Bump go version to 1.22.6
+* Updated dependencies:
+   * https://github.com/hashicorp/vault-plugin-database-redis/pull/72
+
 ## v0.3.0
 IMPROVEMENTS:
 * Updated dependencies:

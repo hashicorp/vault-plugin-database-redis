@@ -8,7 +8,7 @@ resource "null_resource" "docker_compose_up" {
 
   // Running down at the beginning so terraform apply can be executed multiple times to pick up on latest docker-compose.yaml changes
   provisioner "local-exec" {
-    command = "docker-compose -f ./docker-compose.yml down && docker-compose -f ./docker-compose.yml up -d"
+    command = "docker compose -f ./docker-compose.yml down && docker compose -f ./docker-compose.yml up -d"
     when    = create
   }
 }
@@ -19,7 +19,7 @@ resource "null_resource" "docker_compose_down" {
   }
 
   provisioner "local-exec" {
-    command = "docker-compose -f ./docker-compose.yml down"
+    command = "docker compose -f ./docker-compose.yml down"
     when    = destroy
   }
 }
@@ -27,10 +27,10 @@ resource "null_resource" "docker_compose_down" {
 resource "local_file" "setup_environment_file" {
   filename = "local_environment_setup.sh"
   content  = <<EOF
-export TEST_REDIS_PRIMARY_HOST=localhost &&\
-export TEST_REDIS_PRIMARY_PORT=6379 &&\
-export TEST_REDIS_USERNAME=us4rn4m3 &&\
-export TEST_REDIS_PASSWORD=user-pa55w0rd
-unset TEST_REDIS_TLS TEST_REDIS_SECONDARIES TEST_REDIS_CLUSTER TEST_REDIS_SENTINELS
+export TEST_REDIS_PRIMARY_HOST=localhost
+export TEST_REDIS_PRIMARY_PORT=6379
+export TEST_REDIS_USERNAME=default
+export TEST_REDIS_PASSWORD=default-pa55w0rd
+unset  REDIS_TLS TEST_REDIS_CLUSTER TEST_REDIS_SECONDARIES TEST_REDIS_SENTINELS TEST_REDIS_SENTINEL_MASTER_NAME
 EOF
 }
