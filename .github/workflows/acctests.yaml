@@ -4,5 +4,10 @@ on: push
 
 jobs:
   run-acceptance-tests:
-    uses: hashicorp/vault-workflows-common/.github/workflows/acc-tests.yaml@main
-    secrets: inherit
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Setup Terraform"
+        uses: hashicorp/setup-terraform@v3
+      - name: "Run Acc Tests"
+        uses: hashicorp/vault-workflows-common/.github/workflows/acc-tests.yaml@main
+        secrets: inherit
