@@ -1,5 +1,12 @@
 ## Unreleased
 
+## v0.5.0
+* Bump go version to 1.23.3
+IMPROVEMENTS:
+* Updated dependencies:
+  * `github.com/hashicorp/vault/sdk` v0.14.0 -> v0.15.0
+  * `github.com/ory/dockertest/v3` v3.10.0 -> v3.11.0 
+
 ## v0.4.0
 * Bump go version to 1.22.6
 * Updated dependencies:
