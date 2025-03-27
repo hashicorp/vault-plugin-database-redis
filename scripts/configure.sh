@@ -1,5 +1,8 @@
+#! /usr/bin/env bash
 # Copyright (c) HashiCorp, Inc.
 # SPDX-License-Identifier: MPL-2.0
+
+set -eu -o pipefail
 
 PLUGIN_DIR=$1
 PLUGIN_NAME=$2
@@ -8,15 +11,14 @@ TEST_REDIS_PORT=$4
 TEST_REDIS_USERNAME=$5
 TEST_REDIS_PASSWORD=$6
 
-vault plugin deregister "$PLUGIN_NAME"
-vault secrets disable database
-killall "$PLUGIN_NAME"
+vault plugin deregister "$PLUGIN_NAME" 2> /dev/null || true
+vault secrets disable database 2> /dev/null || true
+killall "$PLUGIN_NAME" 2> /dev/null || true
 
-# Give a bit of time for the binary file to be released so we can copy over it
-sleep 3
-
-# Copy the binary so text file is not busy when rebuilding & the plugin is registered
-cp ./bin/"$PLUGIN_NAME" "$PLUGIN_DIR"/"$PLUGIN_NAME"
+if ! [ -f "$PLUGIN_DIR/$PLUGIN_NAME" ]; then
+  echo "Plugin binary not found at $PLUGIN_DIR/$PLUGIN_NAME"
+  exit 1
+fi
 
 # Sets up the binary with local changes
 vault secrets enable database
