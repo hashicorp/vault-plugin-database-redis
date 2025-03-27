@@ -1,4 +1,11 @@
-## Unreleased
+## v0.4.1
+
+IMPROVEMENTS:
+* Bump go version to 1.23.6
+* Updated dependencies:
+    * `github.com/opencontainers/runc` v1.1.13 -> v1.2.6
+    * `golang.org/x/crypto` v0.32.0 -> v0.36.0
+    * `golang.org/x/net` v0.34.0 -> v0.37.0
 
 ## v0.2.3
 IMPROVEMENTS:
