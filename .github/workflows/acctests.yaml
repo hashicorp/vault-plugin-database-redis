@@ -3,6 +3,15 @@ name: Acceptance Tests
 on: push
 
 jobs:
+  install-docker-compose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install Docker Compose
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker-compose
   run-acceptance-tests:
-    uses: hashicorp/vault-workflows-common/.github/workflows/acc-tests.yaml@main
+    uses: hashicorp/vault-workflows-common/.github/workflows/acc-tests.yaml@VAULT-34980/fix-ups
     secrets: inherit

@@ -3,7 +3,7 @@
 
 resource "null_resource" "docker_compose_up" {
   triggers = {
-    always_run = "${timestamp()}"
+    always_run = timestamp()
   }
 
   // Running down at the beginning so terraform apply can be executed multiple times to pick up on latest docker-compose.yaml changes
@@ -15,7 +15,7 @@ resource "null_resource" "docker_compose_up" {
 
 resource "null_resource" "docker_compose_down" {
   triggers = {
-    always_run = "${timestamp()}"
+    always_run = timestamp()
   }
 
   provisioner "local-exec" {
