@@ -78,7 +78,7 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 
 	if c.TLS && !c.InsecureTLS {
 		if len(c.CACert) == 0 {
-			return nil, fmt.Errorf("ca_cert cannot be empty when InsecureTLS is false")
+			return nil, fmt.Errorf("ca_cert cannot be empty")
 		}
 	}
 
