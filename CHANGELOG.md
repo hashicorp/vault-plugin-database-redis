@@ -1,11 +1,14 @@
 ## Unreleased
-* Bump go version to 1.23.6
 
+## v0.6.0
+* Bump go version to 1.23.6
 IMPROVEMENTS:
 * Updated dependencies:
     * `github.com/opencontainers/runc` v1.1.13 -> v1.2.6
     * `golang.org/x/crypto` v0.32.0 -> v0.36.0
-    * `golang.org/x/net` v0.34.0 -> v0.37.0
+    * `golang.org/x/net` v0.34.0 -> v0.38.0
+    * `github.com/hashicorp/vault/sdk` v0.15.2 -> v0.17.0
+    * `github.com/ory/dockertest/v3` v3.11.0 -> v3.12.0
 
 ## v0.5.0
 * Bump go version to 1.23.3
