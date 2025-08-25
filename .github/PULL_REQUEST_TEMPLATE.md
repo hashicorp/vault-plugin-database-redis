@@ -13,6 +13,7 @@ How does this change affect the user experience (if at all)?
 - [ ] Add relevant docs to upstream Vault repository, or sufficient reasoning why docs won’t be added yet
 - [ ] Add output for any tests not ran in CI to the PR description (eg, acceptance tests)
 - [ ] Backwards compatible
+- [ ] Changelog entry added. See [Updating the Changelog](https://github.com/hashicorp/vault-plugin-database-redis/blob/main/README.md#updating-the-changelog).
 
 ## PCI review checklist
 
