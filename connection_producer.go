@@ -9,12 +9,15 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net"
+	"net/url"
+	"os"
 	"strconv"
 	"sync"
 
 	"github.com/hashicorp/vault/sdk/database/helper/connutil"
 	"github.com/mediocregopher/radix/v4"
 	"github.com/mitchellh/mapstructure"
+	"golang.org/x/net/proxy"
 )
 
 type redisDBConnectionProducer struct {
@@ -113,31 +116,69 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (interface{}
 	var err error
 	var poolConfig radix.PoolConfig
 
+	var dialer radix.Dialer
+
+	var tlsDialer *tls.Dialer
 	if c.TLS {
 		rootCAs := x509.NewCertPool()
 		ok := rootCAs.AppendCertsFromPEM([]byte(c.CACert))
 		if !ok {
 			return nil, fmt.Errorf("failed to parse root certificate")
 		}
-		poolConfig = radix.PoolConfig{
-			Dialer: radix.Dialer{
-				AuthUser: c.Username,
-				AuthPass: c.Password,
-				NetDialer: &tls.Dialer{
-					Config: &tls.Config{
-						RootCAs:            rootCAs,
-						InsecureSkipVerify: c.InsecureTLS,
-					},
-				},
+		tlsDialer = &tls.Dialer{
+			Config: &tls.Config{
+				RootCAs:            rootCAs,
+				InsecureSkipVerify: c.InsecureTLS,
 			},
+		}
+	}
+
+	if proxyURL, ok := os.LookupEnv("ALL_PROXY"); ok {
+		u, err := url.Parse(proxyURL)
+		if err != nil {
+			return nil, err
+		}
+		var auth *proxy.Auth
+		if u.User != nil {
+			password, _ := u.User.Password()
+			auth = &proxy.Auth{
+				User:     u.User.Username(),
+				Password: password,
+			}
+		}
+		var forward proxy.Dialer
+		if tlsDialer != nil {
+			forward = tlsDialer
+		} else {
+			forward = proxy.Direct
+		}
+
+		d, err := proxy.SOCKS5("tcp", u.Host, auth, forward)
+		if err != nil {
+			return nil, err
+		}
+		dialer = radix.Dialer{
+			AuthUser:  c.Username,
+			AuthPass:  c.Password,
+			NetDialer: d.(proxy.ContextDialer),
 		}
 	} else {
-		poolConfig = radix.PoolConfig{
-			Dialer: radix.Dialer{
+		if tlsDialer != nil {
+			dialer = radix.Dialer{
+				AuthUser:  c.Username,
+				AuthPass:  c.Password,
+				NetDialer: tlsDialer,
+			}
+		} else {
+			dialer = radix.Dialer{
 				AuthUser: c.Username,
 				AuthPass: c.Password,
-			},
+			}
 		}
+	}
+
+	poolConfig = radix.PoolConfig{
+		Dialer: dialer,
 	}
 
 	client, err := poolConfig.New(ctx, "tcp", c.Addr)
