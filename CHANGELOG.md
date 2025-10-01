@@ -1,3 +1,14 @@
+## v0.6.1
+### September 30, 2025
+
+* Bump go version to resolve sec vuln (#98)
+* Automated dependency upgrades (#90)
+* Bump github.com/go-viper/mapstructure/v2 from 2.1.0 to 2.4.0 (#95)
+* init changie (#96)
+* Add backport assistant workflow (#93)
+* Add backport assistant workflow (#92)
+* [Compliance] - PR Template Changes Required (#91)
+
 ## v0.6.0
 * Bump go version to 1.23.6
 IMPROVEMENTS:
