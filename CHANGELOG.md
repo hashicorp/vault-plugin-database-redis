@@ -1,3 +1,9 @@
+## v0.7.0
+### October 6, 2025
+
+* [COMPLIANCE] Add Copyright and License Headers (#97)
+* Update changelog for v0.6.1 release (#99)
+
 ## v0.6.1
 ### September 30, 2025
 
