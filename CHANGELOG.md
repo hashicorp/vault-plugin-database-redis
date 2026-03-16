@@ -1,3 +1,17 @@
+## Unreleased
+## v0.8.0
+### March 16, 2026
+
+IMPROVEMENTS:
+* Updated dependencies:
+   * go 1.25.1 => 1.26.1
+   * github.com/hashicorp/vault/sdk v0.19.0 => v0.23.0
+   * golang.org/x/text v0.27.0 => v0.31.0
+   * golang.org/x/sys v0.34.0 => v0.38.0
+   * golang.org/x/crypto v0.40.0 => v0.45.0
+   * golang.org/x/net v0.42.0 => v0.47.0
+
+
 ## v0.7.0
 ### October 6, 2025
 
@@ -24,7 +38,7 @@ IMPROVEMENTS:
     * `golang.org/x/net` v0.34.0 -> v0.38.0
     * `github.com/hashicorp/vault/sdk` v0.15.2 -> v0.17.0
     * `github.com/ory/dockertest/v3` v3.11.0 -> v3.12.0
-
+    
 ## v0.5.0
 * Bump go version to 1.23.3
 IMPROVEMENTS:
