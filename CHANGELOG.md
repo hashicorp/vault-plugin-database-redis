@@ -38,7 +38,6 @@ IMPROVEMENTS:
     * `golang.org/x/net` v0.34.0 -> v0.38.0
     * `github.com/hashicorp/vault/sdk` v0.15.2 -> v0.17.0
     * `github.com/ory/dockertest/v3` v3.11.0 -> v3.12.0
-    
 ## v0.5.0
 * Bump go version to 1.23.3
 IMPROVEMENTS:
