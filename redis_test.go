@@ -131,6 +131,7 @@ func TestDriver(t *testing.T) {
 
 	t.Run("Init", func(t *testing.T) { testRedisDBInitialize_NoTLS(t, host, port) })
 	t.Run("Init", func(t *testing.T) { testRedisDBInitialize_TLS(t, host, port) })
+	t.Run("Init", func(t *testing.T) { testRedisDBInitialize_TLSInsecure(t, host, port) })
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser(t, host, port) })
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_DefaultRule(t, host, port) })
 	t.Run("Create/Revoke", func(t *testing.T) { testRedisDBCreateUser_plusRole(t, host, port) })
@@ -204,6 +205,27 @@ func testRedisDBInitialize_TLS(t *testing.T, host string, port int) {
 		"password":     adminPassword,
 		"tls":          true,
 		"ca_cert":      CACert,
+		"insecure_tls": false,
+	}
+	err = setupRedisDBInitialize(t, connectionDetails)
+	if err != nil {
+		t.Fatalf("Testing TLS Init() failed: error: %s", err)
+	}
+}
+
+func testRedisDBInitialize_TLSInsecure(t *testing.T, host string, port int) {
+	if !redisTls {
+		t.Skip("skipping TLS Init() test in plain text mode")
+	}
+
+	t.Log("Testing TLS Init()")
+
+	connectionDetails := map[string]interface{}{
+		"host":         host,
+		"port":         port,
+		"username":     adminUsername,
+		"password":     adminPassword,
+		"tls":          true,
 		"insecure_tls": true,
 	}
 	err = setupRedisDBInitialize(t, connectionDetails)
