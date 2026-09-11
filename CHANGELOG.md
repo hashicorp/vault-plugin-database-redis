@@ -1,3 +1,11 @@
+## v0.9.0
+### September 10, 2026
+
+* VAULT-50059 Upgrade dependency to resolve vulnerability (#113)
+* chore: automated Go/dependency update via vault-plugin-release (#112)
+* bump up golang.org/x/crypto to v0.54.0 (#111)
+* [CHANGELOG] Prepare for v0.8.1 release (#108)
+
 ## v0.8.1
 ### March 19, 2026
 
