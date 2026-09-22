@@ -76,7 +76,7 @@ func (c *redisDBConnectionProducer) Init(ctx context.Context, initConfig map[str
 
 	c.Addr = net.JoinHostPort(c.Host, strconv.Itoa(c.Port))
 
-	if c.TLS {
+	if c.TLS && !c.InsecureTLS {
 		if len(c.CACert) == 0 {
 			return nil, fmt.Errorf("ca_cert cannot be empty")
 		}
@@ -114,20 +114,24 @@ func (c *redisDBConnectionProducer) Connection(ctx context.Context) (interface{}
 	var poolConfig radix.PoolConfig
 
 	if c.TLS {
-		rootCAs := x509.NewCertPool()
-		ok := rootCAs.AppendCertsFromPEM([]byte(c.CACert))
-		if !ok {
-			return nil, fmt.Errorf("failed to parse root certificate")
+		tlsConfig = &tls.Config{
+			InsecureSkipVerify: c.InsecureTLS,
 		}
+		if !c.InsecureTLS && len(c.CACert) > 0 {
+			rootCAs := x509.NewCertPool()
+			ok := rootCAs.AppendCertsFromPEM([]byte(c.CACert))
+			if !ok {
+				return nil, fmt.Errorf("failed to parse root certificate")
+			}
+			tlsConfig.RootCAs = rootCAs
+		}
+
 		poolConfig = radix.PoolConfig{
 			Dialer: radix.Dialer{
 				AuthUser: c.Username,
 				AuthPass: c.Password,
 				NetDialer: &tls.Dialer{
-					Config: &tls.Config{
-						RootCAs:            rootCAs,
-						InsecureSkipVerify: c.InsecureTLS,
-					},
+					Config: tlsConfig,
 				},
 			},
 		}
