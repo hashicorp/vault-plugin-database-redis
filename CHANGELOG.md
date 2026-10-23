@@ -1,3 +1,9 @@
+## v0.9.1
+### October 23, 2026
+
+* [VAULT-50034] Upgrade dependencies to resolve security vulnerabilities (#115)
+* Update changelog for v0.9.0 release (#114)
+
 ## v0.9.0
 ### September 10, 2026
 
